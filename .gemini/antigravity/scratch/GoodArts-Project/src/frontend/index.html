@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>ArtLog</title>
+    <link rel="manifest" href="/manifest.json">
+    <!-- Premium Google Fonts: Playfair Display for headings, Inter for UI text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div id="noise-overlay"></div>
+
+    <!-- Main Content Views -->
+    <main id="app-container">
+        <div id="view-feed" class="view hidden"></div>
+        <div id="view-events" class="view hidden"></div>
+        <div id="view-collection" class="view hidden"></div>
+        <div id="view-search" class="view hidden"></div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-tab" data-view="feed" aria-label="Feed">
+            <span class="nav-icon">&#9654;</span>
+            <span class="nav-label">Feed</span>
+        </button>
+        <button class="nav-tab" data-view="events" aria-label="Events">
+            <span class="nav-icon">&#9670;</span>
+            <span class="nav-label">Events</span>
+        </button>
+        <button class="nav-tab" data-view="collection" aria-label="Collection">
+            <span class="nav-icon">&#9632;</span>
+            <span class="nav-label">Collection</span>
+        </button>
+        <button class="nav-tab" data-view="search" aria-label="Search">
+            <span class="nav-icon">&#9675;</span>
+            <span class="nav-label">Search</span>
+        </button>
+    </nav>
+
+    <!-- Floating Action Button -->
+    <button id="fab-add" class="fab" aria-label="Add artwork">+</button>
+
+    <!-- Artwork Detail Modal -->
+    <div id="artwork-detail-modal" class="modal hidden">
+        <div class="modal-inner">
+            <button class="modal-close" id="artwork-detail-close" aria-label="Close">
+                <svg viewBox="0 0 100 100" width="100%" height="100%">
+                    <path d="M10,15 L95,85 M85,15 L15,95" stroke="var(--text-color)" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <div id="artwork-detail-content">
+                <!-- artwork detail injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts: core -->
+    <script src="/static/js/api.js" defer></script>
+
+    <!-- Scripts: existing components -->
+    <script src="/static/js/components/rating-stars.js" defer></script>
+    <script src="/static/js/components/artwork-card.js" defer></script>
+
+    <!-- Scripts: new components -->
+    <script src="/static/js/components/swipe-deck.js" defer></script>
+    <script src="/static/js/components/expandable.js" defer></script>
+    <script src="/static/js/components/photo-upload.js" defer></script>
+
+    <!-- Scripts: existing views -->
+    <script src="/static/js/views/onboarding.js" defer></script>
+    <script src="/static/js/views/discover.js" defer></script>
+    <script src="/static/js/views/explore.js" defer></script>
+    <script src="/static/js/views/search.js" defer></script>
+    <script src="/static/js/views/checklist.js" defer></script>
+    <script src="/static/js/views/bucketlist.js" defer></script>
+
+    <!-- Scripts: new views -->
+    <script src="/static/js/views/feed.js" defer></script>
+    <script src="/static/js/views/events.js" defer></script>
+    <script src="/static/js/views/collection.js" defer></script>
+    <script src="/static/js/views/artwork-detail.js" defer></script>
+
+    <!-- Scripts: app entry -->
+    <script src="/static/js/app.js" defer></script>
+
+    <!-- PWA: Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>

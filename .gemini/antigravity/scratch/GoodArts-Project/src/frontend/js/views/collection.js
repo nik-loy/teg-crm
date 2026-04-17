@@ -65,7 +65,7 @@ window.CollectionView = {
             var list=document.createElement("div"); list.className="visits-list";
             visits.forEach(function(v){
                 var card=document.createElement("div"); card.className="visit-card";
-                var h3=document.createElement("h3"); h3.textContent=v.museum_name||v.venue_name||"Unknown Museum";
+                var h3=document.createElement("h3"); h3.textContent=v.venue_name||"Unknown Museum";
                 var m=document.createElement("p"); m.textContent=[v.city,v.country,v.visit_date].filter(Boolean).join(" · ");
                 card.appendChild(h3); card.appendChild(m);
                 if(v.notes){var n=document.createElement("p"); n.style.opacity="0.7"; n.textContent=v.notes; card.appendChild(n);}
@@ -78,7 +78,7 @@ window.CollectionView = {
         var body=document.getElementById("capture-body"); if(!body) return; body.textContent="";
         var h2=document.createElement("h2"); h2.textContent="Log Museum Visit"; body.appendChild(h2);
         var form=document.createElement("div"); form.style.cssText="display:flex;flex-direction:column;gap:1rem";
-        [["visit-museum","text","Museum"],["visit-city","text","City"],["visit-country","text","Country"],["visit-date","date",""]].forEach(function(cf){
+        [["visit-venue","text","Museum / Venue"],["visit-city","text","City"],["visit-country","text","Country"],["visit-date","date",""]].forEach(function(cf){
             var i=document.createElement("input"); i.type=cf[1]; i.id=cf[0]; i.className="search-input"; i.placeholder=cf[2]; form.appendChild(i);
         });
         var ta=document.createElement("textarea"); ta.id="visit-notes"; ta.className="search-input"; ta.placeholder="Notes..."; ta.rows=3; form.appendChild(ta);
@@ -87,11 +87,11 @@ window.CollectionView = {
         var m=document.getElementById("capture-modal"); if(m) m.classList.remove("hidden");
     },
     async submitVisit() {
-        var museum=document.getElementById("visit-museum").value.trim(); if(!museum){alert("Museum required.");return;}
+        var venue=document.getElementById("visit-venue").value.trim(); if(!venue){alert("Museum / venue name required.");return;}
         try {
-            await window.API.post("/visits",{museum_name:museum,city:document.getElementById("visit-city").value.trim()||null,
+            await window.API.post("/visits",{venue_name:venue,city:document.getElementById("visit-city").value.trim()||null,
                 country:document.getElementById("visit-country").value.trim()||null,
-                visit_date:document.getElementById("visit-date").value||null,notes:document.getElementById("visit-notes").value.trim()||null});
+                visit_date:document.getElementById("visit-date").value||null,overall_notes:document.getElementById("visit-notes").value.trim()||null});
             var m=document.getElementById("capture-modal"); if(m) m.classList.add("hidden"); this.loadVisits();
         } catch(e){alert("Failed.");}
     }

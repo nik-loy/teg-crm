@@ -119,12 +119,9 @@ window.Onboarding = (function() {
             console.warn('Profile compute call failed, continuing anyway.');
         }
 
-        // Don't reload — just activate the router directly
-        if (typeof window.initRouter === 'function') {
-            window.initRouter();
-        } else {
-            window.location.hash = '#discover';
-        }
+        // Router is already running (initRouter called in DOMContentLoaded).
+        // Navigate to feed — the hashchange handler will render it.
+        window.location.hash = '#feed';
     }
 
     return { init, handleChoice };

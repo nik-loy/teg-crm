@@ -1,8 +1,4 @@
-/**
- * GoodArts — Service Worker
- * Cache static assets, network-first for API calls.
- */
-var CACHE_NAME = 'goodarts-v1';
+var CACHE_NAME = 'goodarts-v2';
 var STATIC_ASSETS = [
     '/',
     '/static/css/styles.css',
@@ -10,6 +6,7 @@ var STATIC_ASSETS = [
     '/static/js/app.js',
     '/static/js/components/rating-stars.js',
     '/static/js/components/artwork-card.js',
+    '/static/js/components/swipe-deck.js',
     '/static/js/components/expandable.js',
     '/static/js/components/photo-upload.js',
     '/static/js/views/feed.js',
@@ -21,6 +18,7 @@ var STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', function(event) {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then(function(cache) {
             return cache.addAll(STATIC_ASSETS);
@@ -30,19 +28,20 @@ self.addEventListener('install', function(event) {
 
 self.addEventListener('activate', function(event) {
     event.waitUntil(
-        caches.keys().then(function(names) {
-            return Promise.all(
-                names.filter(function(n) { return n !== CACHE_NAME; })
-                     .map(function(n) { return caches.delete(n); })
-            );
-        })
+        Promise.all([
+            clients.claim(),
+            caches.keys().then(function(names) {
+                return Promise.all(
+                    names.filter(function(n) { return n !== CACHE_NAME; })
+                         .map(function(n) { return caches.delete(n); })
+                );
+            })
+        ])
     );
 });
 
 self.addEventListener('fetch', function(event) {
     var url = new URL(event.request.url);
-
-    // API calls: network-first
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
             fetch(event.request).then(function(resp) {
@@ -57,8 +56,6 @@ self.addEventListener('fetch', function(event) {
         );
         return;
     }
-
-    // Static assets: cache-first
     event.respondWith(
         caches.match(event.request).then(function(resp) {
             return resp || fetch(event.request);

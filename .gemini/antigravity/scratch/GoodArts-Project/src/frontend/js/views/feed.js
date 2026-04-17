@@ -58,12 +58,47 @@ window.FeedView = {
             this.feedData = await window.API.get("/feed?offset=0&limit=20");
             this.currentIndex = 0;
             if (this.feedData.length === 0) {
-                if (status) status.textContent = "No more artworks to discover right now.";
+                this.loadPopularArtFallback(deck, status);
                 return;
             }
             this.renderCurrentCard();
         } catch (e) {
             if (status) status.textContent = "Could not load feed.";
+        }
+    },
+
+    async loadPopularArtFallback(deck, status) {
+        if (status) status.textContent = "Exploring the canon\u2026";
+        try {
+            var data = await window.API.get("/explore");
+            deck.textContent = "";
+            if (status) status.textContent = "";
+            var heading = document.createElement("h3");
+            heading.style.cssText = "font-family:var(--font-heading);font-style:italic;opacity:0.55;font-size:1rem;text-align:center;margin-bottom:1.5rem;letter-spacing:0.03em;";
+            heading.textContent = "The Canon \u2014 Art That Shaped History";
+            deck.appendChild(heading);
+            var grid = document.createElement("div");
+            grid.className = "search-results-grid";
+            (data.categories || []).forEach(function(cat) {
+                (cat.artworks || []).slice(0, 4).forEach(function(a) {
+                    var card = document.createElement("div");
+                    card.className = "search-result-card";
+                    card.onclick = function() { window.viewArtworkDetails && window.viewArtworkDetails(null, a.id); };
+                    if (a.image_url || a.image_url_hd) {
+                        var img = document.createElement("img");
+                        img.src = a.image_url_hd || a.image_url; img.alt = a.title || ""; img.loading = "lazy";
+                        card.appendChild(img);
+                    }
+                    var info = document.createElement("div"); info.className = "search-result-info";
+                    var h4 = document.createElement("h4"); h4.textContent = a.title || "Untitled";
+                    var p = document.createElement("p"); p.textContent = (a.artist || "Unknown") + (a.year ? " \u00b7 " + a.year : "");
+                    info.appendChild(h4); info.appendChild(p); card.appendChild(info);
+                    grid.appendChild(card);
+                });
+            });
+            deck.appendChild(grid);
+        } catch(e) {
+            if (status) status.textContent = "You\u2019ve seen everything. Check back soon.";
         }
     },
 
@@ -93,7 +128,20 @@ window.FeedView = {
             var b = document.createElement("button"); b.className = "btn-swipe " + cfg[0]; b.textContent = cfg[1]; b.onclick = cfg[2]; btns.appendChild(b);
         });
         card.appendChild(imgDiv); card.appendChild(info); card.appendChild(btns);
-        deck.textContent = ""; deck.appendChild(card);
+
+        // Build deck: hint label above card
+        var hint = document.createElement("div"); hint.id = "swipe-hint";
+        hint.style.cssText = "text-align:center;font-family:var(--font-ui);font-size:1.1rem;font-weight:600;height:1.8rem;letter-spacing:0.08em;transition:color 0.1s;";
+        deck.textContent = ""; deck.appendChild(hint); deck.appendChild(card);
+
+        // Attach swipe gestures if available
+        var self = this;
+        if (window.SwipeDeck) {
+            window.SwipeDeck.attach(card, function(dir) {
+                var weight = dir === "right" ? 3 : dir === "up" ? 5 : -1;
+                self.swipe(weight);
+            });
+        }
     },
 
     async swipe(weight) {

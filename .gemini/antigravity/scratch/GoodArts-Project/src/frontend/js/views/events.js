@@ -26,7 +26,11 @@ window.EventsView = {
             exhs.forEach(function(exh) {
                 var card=document.createElement("div"); card.className="exhibition-card";
                 var info=document.createElement("div"); info.className="exh-info";
-                var h3=document.createElement("h3"); h3.textContent=exh.title;
+                var h3=document.createElement("h3");
+                if (exh.url) {
+                    var titleLink=document.createElement("a"); titleLink.href=exh.url; titleLink.target="_blank"; titleLink.rel="noopener noreferrer";
+                    titleLink.className="exh-title-link"; titleLink.textContent=exh.title; h3.appendChild(titleLink);
+                } else { h3.textContent=exh.title; }
                 var vn=document.createElement("p"); vn.textContent=exh.venue_name||"";
                 var dt=document.createElement("p"); dt.textContent=(exh.start_date||"?")+" - "+(exh.end_date||"?");
                 info.appendChild(h3); info.appendChild(vn); info.appendChild(dt);

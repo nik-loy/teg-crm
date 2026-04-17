@@ -1,67 +1,94 @@
 /**
- * GoodArts � Search View (Multi-Provider)
+ * GoodArts - Search View (Multi-Provider)
  */
 window.SearchView = {
     render(container) {
-        container.innerHTML =
-            "<input type="text" id="search-input" class="search-input" placeholder="Search artists, titles, movements..." autocomplete="off">" +
-            "<div id="search-status" class="mb-2" style="opacity:0.6"></div>" +
-            "<div id="search-results" class="masonry-grid mb-2"></div>" +
-            "<h2 class="section-heading mt-2">Browse Collections</h2>" +
-            "<div id="explore-collections"></div>";
+        container.textContent = '';
 
-        var input = document.getElementById("search-input");
+        var inp = document.createElement('input');
+        inp.type = 'text'; inp.id = 'search-input'; inp.className = 'search-input';
+        inp.placeholder = 'Search artists, titles, movements…'; inp.autocomplete = 'off';
+
+        var status = document.createElement('div');
+        status.id = 'search-status';
+        status.style.cssText = 'opacity:0.6;font-family:var(--font-ui);font-size:0.85rem;margin-top:0.75rem;min-height:1.2rem;';
+
+        var results = document.createElement('div');
+        results.id = 'search-results'; results.className = 'search-results-grid mb-2';
+
+        var collHeading = document.createElement('h2');
+        collHeading.className = 'section-heading'; collHeading.style.marginTop = '2rem';
+        collHeading.textContent = 'Browse Collections';
+
+        var collEl = document.createElement('div');
+        collEl.id = 'explore-collections';
+
+        container.appendChild(inp); container.appendChild(status);
+        container.appendChild(results); container.appendChild(collHeading);
+        container.appendChild(collEl);
+
         var timeout = null;
         var self = this;
-
-        input.addEventListener("input", function(e) {
+        inp.addEventListener('input', function(e) {
             clearTimeout(timeout);
             var q = e.target.value.trim();
             if (q.length < 2) {
-                document.getElementById("search-results").innerHTML = "";
-                document.getElementById("search-status").innerText = "";
-                return;
+                results.textContent = ''; status.textContent = ''; return;
             }
-            document.getElementById("search-status").innerText = "Searching archives...";
+            status.textContent = 'Searching archives…';
             timeout = setTimeout(function() { self.performSearch(q); }, 600);
         });
 
-        setTimeout(function() { input.focus(); }, 100);
+        setTimeout(function() { inp.focus(); }, 100);
         this.loadCollections();
     },
 
     async performSearch(q) {
+        var resultsEl = document.getElementById('search-results');
+        var statusEl = document.getElementById('search-status');
         try {
-            var data = await window.API.get("/search?q=" + encodeURIComponent(q));
-            var total = data.local.length + data.remote.length;
-            document.getElementById("search-status").innerText = "Found " + total + " results.";
-
+            var data = await window.API.get('/search?q=' + encodeURIComponent(q));
             var all = data.local.concat(data.remote);
-            document.getElementById("search-results").innerHTML =
-                all.map(function(a) { return window.Components.ArtworkCard(a); }).join("") ||
-                "<p>No results found.</p>";
+            if (statusEl) statusEl.textContent = 'Found ' + all.length + ' result' + (all.length !== 1 ? 's' : '') + '.';
+            if (resultsEl) {
+                resultsEl.textContent = '';
+                if (all.length === 0) {
+                    var p = document.createElement('p'); p.style.opacity = '0.5';
+                    p.textContent = 'No results found.'; resultsEl.appendChild(p);
+                } else {
+                    var tmp = document.createElement('div');
+                    tmp.innerHTML = all.map(function(a) { return window.Components.ArtworkCard(a); }).join('');
+                    while (tmp.firstChild) resultsEl.appendChild(tmp.firstChild);
+                }
+            }
         } catch (e) {
-            document.getElementById("search-status").innerText = "Search failed.";
+            if (statusEl) statusEl.textContent = 'Search failed.';
         }
     },
 
     async loadCollections() {
-        var el = document.getElementById("explore-collections");
+        var el = document.getElementById('explore-collections');
         if (!el) return;
         try {
-            var data = await window.API.get("/explore");
-            var html = "";
-            data.categories.forEach(function(cat) {
-                if (cat.artworks.length > 0) {
-                    html += "<h3 class="section-subheading">" + cat.name + "</h3>" +
-                        "<div class="masonry-grid mb-2">" +
-                        cat.artworks.map(function(a) { return window.Components.ArtworkCard(a); }).join("") +
-                        "</div>";
-                }
+            var data = await window.API.get('/explore');
+            el.textContent = '';
+            var hasContent = false;
+            (data.categories || []).forEach(function(cat) {
+                if (!cat.artworks || !cat.artworks.length) return;
+                hasContent = true;
+                var h = document.createElement('h3');
+                h.className = 'section-subheading'; h.textContent = cat.name;
+                var grid = document.createElement('div');
+                grid.className = 'search-results-grid mb-2';
+                var tmp = document.createElement('div');
+                tmp.innerHTML = cat.artworks.map(function(a) { return window.Components.ArtworkCard(a); }).join('');
+                while (tmp.firstChild) grid.appendChild(tmp.firstChild);
+                el.appendChild(h); el.appendChild(grid);
             });
-            el.innerHTML = html || "<p style="opacity: 0.5;">No collections available.</p>";
-        } catch (e) {
-            el.innerHTML = "";
-        }
+            if (!hasContent) {
+                var p = document.createElement('p'); p.style.opacity = '0.5';
+                p.textContent = 'No collections available yet.'; el.appendChild(p);
+            }
+        } catch (e) { el.textContent = ''; }
     }
 };

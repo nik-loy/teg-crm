@@ -1,0 +1,467 @@
+/* ArtLog Design System - Abstract Gallery Vibe */
+:root {
+    --bg-color: #0b0a0a;
+    --text-color: #e8e3dc;
+    --accent: #d33c27; /* Rich vermilion */
+    --card-bg: rgba(255, 255, 255, 0.02);
+    --border-messy: 1px solid rgba(232, 227, 220, 0.15);
+    
+    --font-heading: 'Playfair Display', Georgia, serif;
+    --font-ui: 'Inter', Helvetica, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-heading);
+    line-height: 1.6;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Film grain effect to make it feel less digital */
+#noise-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+h1, h2, h3 {
+    font-weight: 400;
+}
+
+.italic-heading {
+    font-style: italic;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+}
+
+/* Nav */
+.abstract-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2.5rem 5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    background: linear-gradient(180deg, rgba(11,10,10,0.9) 0%, rgba(11,10,10,0) 100%);
+}
+
+.nav-logo {
+    position: relative;
+    font-size: 2.5rem;
+    font-weight: 700;
+    font-style: italic;
+    letter-spacing: -0.05em;
+}
+
+.logo-stroke {
+    position: absolute;
+    bottom: -5px;
+    left: -10%;
+    width: 120%;
+    height: 20px;
+    z-index: -1;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 4rem;
+}
+
+.nav-link {
+    font-family: var(--font-ui);
+    color: var(--text-color);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    opacity: 0.4;
+    position: relative;
+    transition: opacity 0.4s ease;
+}
+
+.nav-link:hover, .nav-link.active {
+    opacity: 1;
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: -10%;
+    width: 120%;
+    height: 1px;
+    background: var(--accent);
+    transform: rotate(-1.5deg);
+}
+
+.nav-stats {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    display: flex;
+    gap: 1.5rem;
+}
+
+.nav-stat strong {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* Main Container */
+main {
+    padding: 4rem 5rem;
+    min-height: 80vh;
+}
+
+/* Grids & Layouts */
+.masonry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 3rem;
+    align-items: start;
+}
+
+/* Artwork Cards */
+.artwork-card {
+    background: var(--card-bg);
+    border: var(--border-messy);
+    padding: 1.5rem;
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+    cursor: pointer;
+    position: relative;
+}
+
+/* Abstract torn-edge effect on hover */
+.artwork-card::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    border: 1px solid var(--accent);
+    opacity: 0;
+    transform: scale(0.98) rotate(0.5deg);
+    transition: all 0.4s ease;
+    z-index: -1;
+}
+
+.artwork-card:hover {
+    transform: translateY(-10px);
+    background: transparent;
+}
+
+.artwork-card:hover::before {
+    opacity: 1;
+    transform: scale(1) rotate(-0.5deg);
+}
+
+.artwork-img-container {
+    width: 100%;
+    height: 400px;
+    overflow: hidden;
+    position: relative;
+    background: rgba(255,255,255,0.05); /* placeholder bg */
+}
+
+.artwork-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: grayscale(20%) contrast(1.1);
+    transition: filter 0.6s ease, transform 0.6s ease;
+}
+
+.artwork-card:hover .artwork-img {
+    filter: grayscale(0%) contrast(1.05);
+    transform: scale(1.03);
+}
+
+.artwork-info {
+    margin-top: 1.5rem;
+}
+
+.artwork-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+.artwork-meta {
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 300;
+    opacity: 0.7;
+    margin-bottom: 1rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.artwork-reasons {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-style: normal;
+    margin-top: 1rem;
+    border-left: 2px solid var(--accent);
+    padding-left: 1rem;
+}
+
+/* Overlays & Modals */
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5, 5, 5, 0.98);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(15px);
+    transition: opacity 0.4s ease;
+}
+
+.overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    background: var(--bg-color);
+    border: var(--border-messy);
+    width: 90%;
+    max-width: 1200px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    padding: 4rem;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+}
+
+/* Messy Close Button */
+.modal-close {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    background: none;
+    border: none;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-close:hover {
+    transform: rotate(180deg) scale(1.1);
+}
+
+/* Tinder Swipe Deck */
+.swipe-deck {
+    position: relative;
+    width: 450px;
+    height: 650px;
+    margin: 3rem auto;
+    perspective: 1500px;
+}
+
+.swipe-card {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #000;
+    border: 10px solid #fff; /* Polaroid feel */
+    border-bottom-width: 3rem;
+    transform-origin: 50% 100%;
+    cursor: grab;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+.swipe-card-img-wrap {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.swipe-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.swipe-card-gradient {
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    pointer-events: none;
+}
+
+.swipe-info {
+    position: absolute;
+    bottom: -3rem; /* Push into the white border area */
+    left: 0; right: 0;
+    text-align: center;
+    color: #000;
+    padding: 0.5rem;
+}
+
+.swipe-title {
+    font-size: 1.2rem;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.swipe-meta {
+    font-family: var(--font-ui);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.6;
+}
+
+.swipe-actions {
+    position: absolute;
+    bottom: 50%;
+    transform: translateY(50%);
+    width: 120%;
+    left: -10%;
+    display: flex;
+    justify-content: space-between;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.swipe-card:hover .swipe-actions {
+    opacity: 1;
+}
+
+.btn-swipe {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    border: none;
+    pointer-events: auto;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+    display: flex; justify-content: center; align-items: center;
+}
+.btn-reject { background: #222; }
+.btn-like { background: var(--accent); }
+
+.btn-swipe:hover {
+    transform: scale(1.15);
+}
+
+/* Buttons */
+.btn {
+    font-family: var(--font-ui);
+    padding: 1rem 2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--text-color);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn:hover {
+    background: var(--text-color);
+    color: var(--bg-color);
+}
+
+.btn-messy {
+    background: var(--accent);
+    color: white;
+    border: none;
+    /* Abstract cut-out shape */
+    clip-path: polygon(3% 0, 100% 2%, 98% 100%, 0 96%);
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: normal;
+    padding: 1.2rem 3rem;
+}
+
+.btn-messy:hover {
+    clip-path: polygon(0 2%, 97% 0, 100% 98%, 2% 100%);
+    background: white;
+    color: var(--accent);
+    transform: rotate(-1deg);
+}
+
+/* Museum Cards */
+.museum-card {
+    background: transparent;
+    border-top: 3px solid var(--text-color);
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+}
+.museum-name { 
+    font-size: 2rem; 
+    font-style: italic;
+    margin-bottom: 0.5rem;
+}
+.museum-why { 
+    font-family: var(--font-ui);
+    color: var(--accent); 
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 1rem; 
+}
+
+/* Section Headings */
+h2 {
+    font-size: 3rem;
+    font-style: italic;
+    margin-bottom: 3rem;
+    line-height: 1.1;
+}
+
+/* Utilities */
+.text-center { text-align: center; }
+.mt-2 { margin-top: 4rem; }
+.mb-2 { margin-bottom: 4rem; }
+.hidden { display: none !important; }
+
+/* Sections Transition */
+.view-section {
+    display: none;
+    animation: fadeInSlide 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+.view-section.active { display: block; }
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.5; }
+}

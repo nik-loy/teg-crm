@@ -34,7 +34,7 @@ const API = {
     async delete(endpoint) {
         const res = await fetch('/api' + endpoint, { method: 'DELETE' });
         if (!res.ok) throw new Error(await res.text());
-        return res.json();
+        return res.status === 204 ? null : res.json();
     },
 
     getExhibitions(city) {

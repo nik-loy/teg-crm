@@ -48,7 +48,7 @@ window.SearchView = {
         var statusEl = document.getElementById('search-status');
         try {
             var data = await window.API.get('/search?q=' + encodeURIComponent(q));
-            var all = data.local.concat(data.remote);
+            var all = (data.local || []).concat(data.remote || []);
             if (statusEl) statusEl.textContent = 'Found ' + all.length + ' result' + (all.length !== 1 ? 's' : '') + '.';
             if (resultsEl) {
                 resultsEl.textContent = '';

@@ -18,10 +18,11 @@ var STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', function(event) {
-    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then(function(cache) {
-            return cache.addAll(STATIC_ASSETS);
+            return cache.addAll(STATIC_ASSETS).then(function() {
+                return self.skipWaiting();
+            });
         })
     );
 });

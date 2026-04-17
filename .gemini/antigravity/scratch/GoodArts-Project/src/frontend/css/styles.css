@@ -631,13 +631,6 @@ body[data-tab="events"] #app-container::before {
     background-position: center center;
 }
 
-/* SEARCH -- Monet soft impressionist gradient horizon */
-body[data-tab="search"] #app-container::before {
-    opacity: 1;
-    background:
-        radial-gradient(ellipse 120% 30% at 50% 100%, rgba(46,139,139,0.07) 0%, transparent 70%),
-        radial-gradient(ellipse 80% 20% at 30% 85%, rgba(46,120,160,0.04) 0%, transparent 60%);
-}
 
 /* COLLECTION -- Van Gogh ochre, warm cross-hatch texture */
 body[data-tab="collection"] #app-container::before {

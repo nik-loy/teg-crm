@@ -56,9 +56,7 @@ window.SearchView = {
                     var p = document.createElement('p'); p.style.opacity = '0.5';
                     p.textContent = 'No results found.'; resultsEl.appendChild(p);
                 } else {
-                    var tmp = document.createElement('div');
-                    tmp.innerHTML = all.map(function(a) { return window.Components.ArtworkCard(a); }).join('');
-                    while (tmp.firstChild) resultsEl.appendChild(tmp.firstChild);
+                    all.forEach(function(a) { resultsEl.appendChild(window.Components.ArtworkCard(a)); });
                 }
             }
         } catch (e) {
@@ -80,9 +78,7 @@ window.SearchView = {
                 h.className = 'section-subheading'; h.textContent = cat.name;
                 var grid = document.createElement('div');
                 grid.className = 'search-results-grid mb-2';
-                var tmp = document.createElement('div');
-                tmp.innerHTML = cat.artworks.map(function(a) { return window.Components.ArtworkCard(a); }).join('');
-                while (tmp.firstChild) grid.appendChild(tmp.firstChild);
+                cat.artworks.forEach(function(a) { grid.appendChild(window.Components.ArtworkCard(a)); });
                 el.appendChild(h); el.appendChild(grid);
             });
             if (!hasContent) {

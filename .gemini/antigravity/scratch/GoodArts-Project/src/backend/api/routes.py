@@ -482,3 +482,10 @@ async def upload_photo(
         "path": f"/uploads/{filename}",
         "thumbnail": f"/uploads/thumbs/{thumb_key}_thumb.jpg",
     }
+
+
+@router.post("/exhibitions/sync")
+async def sync_exhibitions_route(db: aiosqlite.Connection = Depends(get_db)):
+    from src.backend.jobs.exhibition_sync import sync_exhibitions
+    await sync_exhibitions(db)
+    return {"synced": True}

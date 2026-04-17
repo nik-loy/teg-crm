@@ -1,5 +1,5 @@
 """
-GoodArts — Artsy API Client
+GoodArts - Artsy API Client
 Fetches exhibition data. Requires ARTSY_CLIENT_ID and ARTSY_CLIENT_SECRET.
 """
 import httpx

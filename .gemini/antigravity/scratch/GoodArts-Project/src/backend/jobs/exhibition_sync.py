@@ -1,5 +1,5 @@
 """
-GoodArts — Exhibition Sync Job
+GoodArts - Exhibition Sync Job
 Polls Artsy for exhibitions in user's configured cities.
 """
 import aiosqlite

@@ -593,4 +593,20 @@ body[data-tab="collection"] { --accent: #c17817; }
 .search-result-info span { opacity: 0.6; }
 
 
+/* Modal close button */
+.modal-close { color: var(--text-color); font-size: 1.3rem; }
+.modal-close:hover { color: var(--accent); }
+
+/* Swipe hint label */
+#swipe-hint {
+    font-family: var(--font-ui);
+    font-size: 1.1rem;
+    font-weight: 600;
+    height: 1.8rem;
+    text-align: center;
+    letter-spacing: 0.1em;
+    transition: color 0.1s;
+    user-select: none;
+}
+
 /* Artist themes — see art-theme.css */

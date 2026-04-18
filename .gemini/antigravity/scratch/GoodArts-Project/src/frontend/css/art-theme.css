@@ -1,0 +1,308 @@
+/* ═══════════════════════════════════════════════════════════════
+   GoodArts — Artist Theme System
+   Scope: backgrounds, colors, textures, micro-interactions only.
+   Invariant: layout, navigation, and component shapes unchanged.
+   FAB invariant: border-radius:50% enforced below.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shared: decorative fixed layer behind all content ── */
+#app-container { position: relative; }
+#app-container::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+.view-section { position: relative; z-index: 1; }
+
+/* ── Onboarding reveal gate ── */
+body.theme-dormant #app-container::before {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+/* ── FAB circular invariant ── */
+.fab {
+    border-radius: 50% !important;
+    transition: background 0.8s ease, box-shadow 0.6s ease;
+}
+
+/* ── Per-tab accent colours ── */
+body[data-tab="feed"]       { --accent: #d33c27; }
+body[data-tab="events"]     { --accent: #c4a35a; }
+body[data-tab="search"]     { --accent: #4a90d9; }
+body[data-tab="collection"] { --accent: #c9a84c; }
+
+/* ── Exhibition card: reset border-top for Dalí ── */
+body[data-tab="events"] .exhibition-card { border-top-width: 1px; }
+
+
+/* ════════════════════════════════════════════════════════════════
+   1. FEED — Van Gogh
+   ════════════════════════════════════════════════════════════════ */
+
+body[data-tab="feed"] #app-container::before {
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'%3E%3Cpath d='M100,400 C150,200 350,50 500,150 C650,250 700,450 600,600 C500,750 250,750 150,600 C50,450 50,600 100,400Z' stroke='%23d33c27' stroke-width='5' fill='none' opacity='0.7'/%3E%3Cpath d='M200,350 C300,100 550,80 650,200 C750,320 720,550 580,650 C440,750 200,700 150,550 C100,400 100,600 200,350Z' stroke='%23e8832a' stroke-width='3' fill='none' opacity='0.45'/%3E%3Cpath d='M50,300 C200,0 600,50 700,250 C800,450 700,700 500,750 C300,800 0,650 50,450 C100,250 -50,600 50,300Z' stroke='%23d33c27' stroke-width='2' fill='none' opacity='0.25'/%3E%3Cpath d='M400,100 C500,50 650,100 700,300 C750,500 650,700 400,720 C150,740 50,600 80,380 C110,160 300,150 400,100Z' stroke='%23c8381f' stroke-width='4' fill='none' opacity='0.3'/%3E%3C/svg%3E");
+    background-size: cover;
+    animation: vg-swirl 22s ease-in-out infinite alternate;
+}
+
+@keyframes vg-swirl {
+    0%   { transform: scale(1.0)  rotate(0deg);    }
+    40%  { transform: scale(1.05) rotate(2deg);    }
+    70%  { transform: scale(1.08) rotate(-1deg);   }
+    100% { transform: scale(1.02) rotate(-2.5deg); }
+}
+
+body[data-tab="feed"] .section-heading {
+    font-style: italic;
+    letter-spacing: -0.04em;
+    text-shadow: 1px 1px 0 rgba(211,60,39,0.18);
+}
+
+body[data-tab="feed"] .fab {
+    background: radial-gradient(circle at 38% 32%, #f09050, #d33c27 55%, #7d1e0f);
+    box-shadow: 0 4px 16px rgba(211,60,39,0.5), inset 0 1px 0 rgba(255,200,150,0.3);
+}
+
+body[data-tab="feed"] .artwork-card {
+    transition: box-shadow 0.6s ease;
+}
+body[data-tab="feed"] .artwork-card.framed {
+    box-shadow:
+        0 0 0 3px rgba(211,60,39,0.55),
+        4px 6px 0   rgba(211,60,39,0.2),
+        -3px -3px 0 rgba(232,131,42,0.15),
+        0 8px 24px  rgba(0,0,0,0.4);
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   2. EVENTS — Dalí
+   ════════════════════════════════════════════════════════════════ */
+
+body[data-tab="events"] #app-container::before {
+    opacity: 1;
+    background: linear-gradient(
+        180deg,
+        #120a24 0%,
+        #2a1040 15%,
+        #6b3528 42%,
+        #c4783c 60%,
+        #d4a86a 78%,
+        #c8bfa0 100%
+    );
+}
+
+body[data-tab="events"] .exhibition-card {
+    border: 1px solid rgba(196,163,90,0.35);
+    border-radius: 2px;
+    filter: url(#dali-warp);
+    transition: filter 0.4s ease, border-color 0.3s ease;
+}
+
+body[data-tab="events"] .exhibition-card:hover {
+    border-color: rgba(196,163,90,0.75);
+    filter: url(#dali-warp-strong);
+}
+
+body[data-tab="events"] .exh-affinity {
+    background: #c4a35a;
+    color: #120a24;
+    font-weight: 700;
+    border-radius: 2px;
+}
+
+body[data-tab="events"] .events-header h2 {
+    letter-spacing: 0.06em;
+    text-shadow: 0 2px 12px rgba(196,163,90,0.3);
+}
+
+body[data-tab="events"] .exh-info h3 {
+    letter-spacing: 0.02em;
+}
+
+body[data-tab="events"] .exh-venue {
+    color: rgba(196,163,90,0.75);
+    opacity: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+body[data-tab="events"] .exh-actions {
+    border-top: 2px solid rgba(196,163,90,0.25);
+}
+
+body[data-tab="events"] .fab {
+    background: linear-gradient(135deg, #b09870, #c4a35a 45%, #7a6840);
+    box-shadow: 0 3px 14px rgba(196,163,90,0.45), inset 0 1px 0 rgba(255,240,200,0.2);
+}
+
+body[data-tab="events"] .artwork-card {
+    transition: box-shadow 0.6s ease;
+}
+body[data-tab="events"] .artwork-card.framed {
+    box-shadow:
+        0 0 0 2px rgba(196,163,90,0.65),
+        2px 4px 0   rgba(196,163,90,0.15),
+        0 8px 24px  rgba(0,0,0,0.5);
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   3. SEARCH — Magritte
+   ════════════════════════════════════════════════════════════════ */
+
+body[data-tab="search"] #app-container::before {
+    opacity: 1;
+    background: linear-gradient(
+        180deg,
+        #0d1f35 0%,
+        #1a3a5c 20%,
+        #2e6b9e 50%,
+        #5a9fd4 75%,
+        #a8cfe8 100%
+    );
+}
+
+.magritte-cloud {
+    position: fixed;
+    pointer-events: none;
+    z-index: 0;
+    background: rgba(255,255,255,0.82);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    box-shadow: inset -4px -4px 8px rgba(0,0,0,0.04);
+    animation: cloud-drift linear infinite;
+}
+.magritte-cloud::before {
+    content: '';
+    position: absolute;
+    top: -40%; left: 15%;
+    width: 60%; height: 80%;
+    background: rgba(255,255,255,0.88);
+    border-radius: 50%;
+}
+.magritte-cloud::after {
+    content: '';
+    position: absolute;
+    top: -25%; right: 10%;
+    width: 45%; height: 70%;
+    background: rgba(255,255,255,0.86);
+    border-radius: 50%;
+}
+
+@keyframes cloud-drift {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-120vw); }
+}
+
+body[data-tab="search"] .search-input {
+    border-color: rgba(74,144,217,0.4);
+    border-radius: 4px;
+}
+body[data-tab="search"] .search-input:focus {
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 3px rgba(74,144,217,0.15);
+}
+
+body[data-tab="search"] .search-result-card {
+    border-radius: 4px;
+    border-color: rgba(74,144,217,0.2);
+    transition: box-shadow 0.4s ease, border-color 0.3s ease;
+}
+body[data-tab="search"] .search-result-card:hover {
+    border-color: rgba(74,144,217,0.5);
+    box-shadow: 0 6px 24px rgba(74,144,217,0.2);
+}
+
+body[data-tab="search"] .section-heading,
+body[data-tab="search"] .section-subheading {
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    color: rgba(232,227,220,0.75);
+}
+
+body[data-tab="search"] .fab {
+    background: radial-gradient(circle at 40% 35%, #6aaee0, #4a90d9 55%, #1a5fa8);
+    box-shadow: 0 3px 14px rgba(74,144,217,0.45), inset 0 1px 0 rgba(200,230,255,0.25);
+}
+
+body[data-tab="search"] .artwork-card {
+    transition: box-shadow 0.6s ease;
+}
+body[data-tab="search"] .artwork-card.framed {
+    box-shadow:
+        0 0 0 2px rgba(74,144,217,0.55),
+        0 6px 20px rgba(0,0,0,0.35);
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   4. COLLECTION — Klimt
+   ════════════════════════════════════════════════════════════════ */
+
+body[data-tab="collection"] #app-container::before {
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpolygon points='30,2 58,16 58,44 30,58 2,44 2,16' stroke='%23c9a84c' stroke-width='1.5' fill='none' opacity='0.8'/%3E%3Cpolygon points='30,10 50,20 50,40 30,50 10,40 10,20' stroke='%23f0d060' stroke-width='0.5' fill='none' opacity='0.4'/%3E%3Ccircle cx='30' cy='30' r='4' fill='%23c9a84c' opacity='0.3'/%3E%3Cline x1='30' y1='2' x2='30' y2='10' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3Cline x1='58' y1='16' x2='50' y2='20' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3Cline x1='58' y1='44' x2='50' y2='40' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3Cline x1='30' y1='58' x2='30' y2='50' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3Cline x1='2' y1='44' x2='10' y2='40' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3Cline x1='2' y1='16' x2='10' y2='20' stroke='%23c9a84c' stroke-width='1' opacity='0.6'/%3E%3C/svg%3E");
+    background-size: 60px 60px;
+}
+
+body[data-tab="collection"] .fab {
+    background: radial-gradient(circle at 38% 30%, #f5e080, #c9a84c 50%, #8b6914);
+    box-shadow: 0 3px 14px rgba(201,168,76,0.5), inset 0 1px 0 rgba(255,240,160,0.3);
+    animation: klimt-shimmer 3.5s ease-in-out infinite;
+}
+
+@keyframes klimt-shimmer {
+    0%   { box-shadow: 0 3px 14px rgba(201,168,76,0.5),  inset 0 1px 0 rgba(255,240,160,0.3); }
+    50%  { box-shadow: 0 4px 22px rgba(201,168,76,0.85), inset 0 1px 0 rgba(255,250,180,0.45); }
+    100% { box-shadow: 0 3px 14px rgba(201,168,76,0.5),  inset 0 1px 0 rgba(255,240,160,0.3); }
+}
+
+body[data-tab="collection"] .artwork-card {
+    background: rgba(201,168,76,0.03);
+    border-color: rgba(201,168,76,0.18);
+    transition: box-shadow 0.6s ease;
+}
+body[data-tab="collection"] .artwork-card.framed {
+    box-shadow:
+        0 0 0 3px rgba(201,168,76,0.65),
+        0 0 0 6px rgba(201,168,76,0.1),
+        inset 0 0 0 1px rgba(201,168,76,0.2),
+        0 8px 24px rgba(0,0,0,0.4);
+}
+
+body[data-tab="collection"] .sub-tab.active {
+    border-bottom-color: #c9a84c;
+    color: #c9a84c;
+}
+
+body[data-tab="collection"] .visit-card {
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    border-left: 4px solid #c9a84c;
+    border-radius: 0 8px 8px 0;
+    padding-left: 1.5rem;
+    background: rgba(201,168,76,0.03);
+}
+
+body[data-tab="collection"] .annotation-entry {
+    border-left: 3px dashed rgba(201,168,76,0.5);
+}
+
+body[data-tab="collection"] .section-heading {
+    font-style: italic;
+    color: rgba(232,227,220,0.85);
+}
+
+body[data-tab="collection"] .journal-stats {
+    font-family: var(--font-heading);
+    font-style: italic;
+    opacity: 0.9;
+}

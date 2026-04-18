@@ -101,12 +101,18 @@ body[data-tab="events"] #app-container::before {
 body[data-tab="events"] .exhibition-card {
     border: 1px solid rgba(196,163,90,0.35);
     border-radius: 2px;
-    filter: url(#dali-warp);
     transition: filter 0.4s ease, border-color 0.3s ease;
+}
+
+body.dali-filters-ready[data-tab="events"] .exhibition-card {
+    filter: url(#dali-warp);
 }
 
 body[data-tab="events"] .exhibition-card:hover {
     border-color: rgba(196,163,90,0.75);
+}
+
+body.dali-filters-ready[data-tab="events"] .exhibition-card:hover {
     filter: url(#dali-warp-strong);
 }
 
@@ -255,13 +261,14 @@ body[data-tab="collection"] #app-container::before {
 body[data-tab="collection"] .fab {
     background: radial-gradient(circle at 38% 30%, #f5e080, #c9a84c 50%, #8b6914);
     box-shadow: 0 3px 14px rgba(201,168,76,0.5), inset 0 1px 0 rgba(255,240,160,0.3);
+    will-change: filter;
     animation: klimt-shimmer 3.5s ease-in-out infinite;
 }
 
 @keyframes klimt-shimmer {
-    0%   { box-shadow: 0 3px 14px rgba(201,168,76,0.5),  inset 0 1px 0 rgba(255,240,160,0.3); }
-    50%  { box-shadow: 0 4px 22px rgba(201,168,76,0.85), inset 0 1px 0 rgba(255,250,180,0.45); }
-    100% { box-shadow: 0 3px 14px rgba(201,168,76,0.5),  inset 0 1px 0 rgba(255,240,160,0.3); }
+    0%   { filter: brightness(1)    drop-shadow(0 3px 10px rgba(201,168,76,0.45)); }
+    50%  { filter: brightness(1.12) drop-shadow(0 4px 18px rgba(201,168,76,0.8)); }
+    100% { filter: brightness(1)    drop-shadow(0 3px 10px rgba(201,168,76,0.45)); }
 }
 
 body[data-tab="collection"] .artwork-card {

@@ -3,96 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1a1a2e">
-    <title>ArtLog</title>
+    <meta name="theme-color" content="#0b0a0a">
+    <title>GoodArts</title>
     <link rel="manifest" href="/manifest.json">
-    <!-- Premium Google Fonts: Playfair Display for headings, Inter for UI text -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/art-theme.css">
 </head>
 <body>
     <div id="noise-overlay"></div>
 
+    <!-- SVG filter defs for Dalí displacement warp (Events tab) -->
+    <svg id="art-svg-defs" style="display:none;position:absolute;width:0;height:0;" aria-hidden="true">
+        <defs>
+            <filter id="dali-warp" x="-5%" y="-5%" width="110%" height="110%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.014 0.007"
+                              numOctaves="3" seed="5" result="noise"/>
+                <feDisplacementMap in="SourceGraphic" in2="noise"
+                                   scale="4" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <filter id="dali-warp-strong" x="-5%" y="-5%" width="110%" height="110%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.014 0.007"
+                              numOctaves="3" seed="5" result="noise"/>
+                <feDisplacementMap in="SourceGraphic" in2="noise"
+                                   scale="9" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- Onboarding Overlay -->
+    <div id="onboarding-overlay" class="overlay hidden">
+        <div class="modal-content" style="max-width:500px; text-align:center;">
+            <h2 style="font-style:italic; margin-bottom:1rem;">What art speaks to you?</h2>
+            <p style="font-family:var(--font-ui); font-size:0.85rem; opacity:0.6; margin-bottom:2rem;">Swipe to rate — we'll learn your taste.</p>
+            <div id="swipe-deck" class="swipe-deck"></div>
+            <div id="onboarding-controls" class="hidden" style="margin-top:2rem; display:flex; gap:1rem; justify-content:center;">
+                <button id="btn-skip-onboarding" class="btn btn-outline">Skip for now</button>
+                <button id="btn-continue-onboarding" class="btn">Keep rating</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Content Views -->
     <main id="app-container">
-        <div id="view-feed" class="view hidden"></div>
-        <div id="view-events" class="view hidden"></div>
-        <div id="view-collection" class="view hidden"></div>
-        <div id="view-search" class="view hidden"></div>
+        <div id="view-feed" class="view-section"></div>
+        <div id="view-events" class="view-section"></div>
+        <div id="view-collection" class="view-section"></div>
+        <div id="view-search" class="view-section"></div>
     </main>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
-        <button class="nav-tab" data-view="feed" aria-label="Feed">
-            <span class="nav-icon">&#9654;</span>
-            <span class="nav-label">Feed</span>
-        </button>
-        <button class="nav-tab" data-view="events" aria-label="Events">
-            <span class="nav-icon">&#9670;</span>
-            <span class="nav-label">Events</span>
-        </button>
-        <button class="nav-tab" data-view="collection" aria-label="Collection">
-            <span class="nav-icon">&#9632;</span>
-            <span class="nav-label">Collection</span>
-        </button>
-        <button class="nav-tab" data-view="search" aria-label="Search">
-            <span class="nav-icon">&#9675;</span>
-            <span class="nav-label">Search</span>
-        </button>
+        <a class="tab-link" href="#feed" aria-label="Feed">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            <span>Feed</span>
+        </a>
+        <a class="tab-link" href="#events" aria-label="Events">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span>Events</span>
+        </a>
+        <a class="tab-link" href="#collection" aria-label="Collection">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Collection</span>
+        </a>
+        <a class="tab-link" href="#search" aria-label="Search">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <span>Search</span>
+        </a>
     </nav>
 
     <!-- Floating Action Button -->
-    <button id="fab-add" class="fab" aria-label="Add artwork">+</button>
+    <button id="fab-capture" class="fab" aria-label="Quick Capture">+</button>
 
     <!-- Artwork Detail Modal -->
-    <div id="artwork-detail-modal" class="modal hidden">
-        <div class="modal-inner">
-            <button class="modal-close" id="artwork-detail-close" aria-label="Close">
-                <svg viewBox="0 0 100 100" width="100%" height="100%">
-                    <path d="M10,15 L95,85 M85,15 L15,95" stroke="var(--text-color)" stroke-width="3" stroke-linecap="round"/>
-                </svg>
-            </button>
-            <div id="artwork-detail-content">
-                <!-- artwork detail injected here -->
-            </div>
+    <div id="artwork-modal" class="overlay hidden">
+        <div class="modal-content modal-large">
+            <button class="modal-close" id="modal-close" aria-label="Close">&#10005;</button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Generic Capture / Form Modal -->
+    <div id="capture-modal" class="overlay hidden">
+        <div class="modal-content" style="max-width:600px;">
+            <button class="modal-close" onclick="document.getElementById('capture-modal').classList.add('hidden')" aria-label="Close">&#10005;</button>
+            <div id="capture-body"></div>
         </div>
     </div>
 
     <!-- Scripts: core -->
     <script src="/static/js/api.js" defer></script>
 
-    <!-- Scripts: existing components -->
+    <!-- Scripts: components -->
     <script src="/static/js/components/rating-stars.js" defer></script>
     <script src="/static/js/components/artwork-card.js" defer></script>
-
-    <!-- Scripts: new components -->
     <script src="/static/js/components/swipe-deck.js" defer></script>
     <script src="/static/js/components/expandable.js" defer></script>
     <script src="/static/js/components/photo-upload.js" defer></script>
 
-    <!-- Scripts: existing views -->
+    <!-- Scripts: views -->
     <script src="/static/js/views/onboarding.js" defer></script>
-    <script src="/static/js/views/discover.js" defer></script>
-    <script src="/static/js/views/explore.js" defer></script>
-    <script src="/static/js/views/search.js" defer></script>
-    <script src="/static/js/views/checklist.js" defer></script>
-    <script src="/static/js/views/bucketlist.js" defer></script>
-
-    <!-- Scripts: new views -->
     <script src="/static/js/views/feed.js" defer></script>
     <script src="/static/js/views/events.js" defer></script>
+    <script src="/static/js/views/search.js" defer></script>
     <script src="/static/js/views/collection.js" defer></script>
     <script src="/static/js/views/artwork-detail.js" defer></script>
+    <script src="/static/js/art-theme.js" defer></script>
 
     <!-- Scripts: app entry -->
     <script src="/static/js/app.js" defer></script>
 
-    <!-- PWA: Service Worker Registration -->
+    <!-- PWA: Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
+            navigator.serviceWorker.register('/sw.js').catch(function() {});
         }
     </script>
 </body>

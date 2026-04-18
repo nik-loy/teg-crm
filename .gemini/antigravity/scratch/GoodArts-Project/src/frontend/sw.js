@@ -1,7 +1,9 @@
-var CACHE_NAME = 'goodarts-v2';
+var CACHE_NAME = 'goodarts-v3';
 var STATIC_ASSETS = [
     '/',
     '/static/css/styles.css',
+    '/static/css/art-theme.css',
+    '/static/js/art-theme.js',
     '/static/js/api.js',
     '/static/js/app.js',
     '/static/js/components/rating-stars.js',

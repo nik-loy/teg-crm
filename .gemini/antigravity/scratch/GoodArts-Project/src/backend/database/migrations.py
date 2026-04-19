@@ -172,7 +172,6 @@ CREATE INDEX IF NOT EXISTS idx_artworks_movement   ON artworks(movement);
 CREATE INDEX IF NOT EXISTS idx_artworks_artist     ON artworks(artist);
 CREATE INDEX IF NOT EXISTS idx_artworks_wikidata   ON artworks(wikidata_id);
 CREATE INDEX IF NOT EXISTS idx_artworks_europeana  ON artworks(europeana_id);
-CREATE INDEX IF NOT EXISTS idx_artworks_source     ON artworks(source, source_id);
 CREATE INDEX IF NOT EXISTS idx_user_artworks_list  ON user_artworks(list_type);
 CREATE INDEX IF NOT EXISTS idx_user_artworks_rating ON user_artworks(rating);
 CREATE INDEX IF NOT EXISTS idx_taste_dimension     ON taste_profile(dimension, value);
@@ -183,6 +182,47 @@ CREATE INDEX IF NOT EXISTS idx_photos_artwork      ON photos(artwork_id);
 CREATE INDEX IF NOT EXISTS idx_photos_visit        ON photos(visit_id);
 CREATE INDEX IF NOT EXISTS idx_annotations_artwork ON artwork_annotations(artwork_id);
 CREATE INDEX IF NOT EXISTS idx_probe_log_date      ON probe_log(created_at);
+
+CREATE TABLE IF NOT EXISTS artwork_dossier (
+    artwork_id          INTEGER PRIMARY KEY REFERENCES artworks(id) ON DELETE CASCADE,
+    artic_id            TEXT,
+    medium_display      TEXT,
+    technique_titles    TEXT,
+    style_titles        TEXT,
+    subject_titles      TEXT,
+    classification_titles TEXT,
+    physical_dimensions TEXT,
+    inscriptions        TEXT,
+    color_palette       TEXT,
+    technique_definitions TEXT,
+    movement_hierarchy  TEXT,
+    movement_characteristics TEXT,
+    artist_influences   TEXT,
+    artist_influenced   TEXT,
+    artist_bio          TEXT,
+    artist_nationality  TEXT,
+    artist_birth_year   INTEGER,
+    artist_death_year   INTEGER,
+    data_sources        TEXT,
+    status              TEXT DEFAULT 'pending',
+    attempts            INTEGER DEFAULT 0,
+    queued_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at        TIMESTAMP,
+    error_message       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS dossier_queue (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    artwork_id      INTEGER UNIQUE REFERENCES artworks(id) ON DELETE CASCADE,
+    priority        INTEGER DEFAULT 1,
+    status          TEXT DEFAULT 'pending',
+    attempts        INTEGER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_attempted_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_dossier_queue_priority
+    ON dossier_queue(status, priority DESC, created_at ASC);
 """
 
 
@@ -200,6 +240,46 @@ async def run_migrations():
                 await db.execute(f"ALTER TABLE artworks ADD COLUMN {col} {typ}")
             except Exception:
                 pass
+        # Create this index after source_id is guaranteed to exist
+        try:
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_artworks_source ON artworks(source, source_id)"
+            )
+        except Exception:
+            pass
+        # Seed artwork data once (idempotent)
+        async with db.execute("SELECT COUNT(*) FROM artworks WHERE source='seed'") as cur:
+            artwork_seed_count = (await cur.fetchone())[0]
+        if artwork_seed_count == 0:
+            from src.backend.data.test_artworks_seed import get_test_artworks_seed
+            for artwork in get_test_artworks_seed():
+                cols = list(artwork.keys())
+                vals = list(artwork.values())
+                placeholders = ", ".join("?" * len(cols))
+                col_str = ", ".join(cols)
+                await db.execute(
+                    f"INSERT OR IGNORE INTO artworks ({col_str}) VALUES ({placeholders})",
+                    vals,
+                )
+            await db.commit()
+            print(f"Seeded {len(get_test_artworks_seed())} test artworks.")
+
+        # Seed exhibition data once (idempotent)
+        async with db.execute("SELECT COUNT(*) FROM exhibitions WHERE source='seed'") as cur:
+            seed_count = (await cur.fetchone())[0]
+        if seed_count == 0:
+            from src.backend.data.exhibition_seed import get_exhibition_seed
+            for exh in get_exhibition_seed():
+                cols = list(exh.keys())
+                vals = list(exh.values())
+                placeholders = ", ".join("?" * len(cols))
+                col_str = ", ".join(cols)
+                await db.execute(
+                    f"INSERT OR IGNORE INTO exhibitions ({col_str}) VALUES ({placeholders})",
+                    vals,
+                )
+            await db.commit()
+            print(f"Seeded {len(get_exhibition_seed())} exhibitions.")
         for col, typ in [
             ("last_rating_at", "TIMESTAMP"),
             ("sentiment_sum", "REAL DEFAULT 0.0"),
@@ -208,5 +288,11 @@ async def run_migrations():
                 await db.execute(f"ALTER TABLE taste_profile ADD COLUMN {col} {typ}")
             except Exception:
                 pass
+        try:
+            await db.execute(
+                "ALTER TABLE user_settings ADD COLUMN cma_fetch_offset INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass
         await db.commit()
     print("Database schema is up to date.")

@@ -208,13 +208,14 @@ CREATE TABLE IF NOT EXISTS artwork_dossier (
     attempts            INTEGER DEFAULT 0,
     queued_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at        TIMESTAMP,
-    error_message       TEXT
+    error_message       TEXT,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS dossier_queue (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     artwork_id      INTEGER UNIQUE REFERENCES artworks(id) ON DELETE CASCADE,
-    priority        INTEGER DEFAULT 1,
+    priority        INTEGER DEFAULT 1 CHECK(priority BETWEEN 1 AND 10),
     status          TEXT DEFAULT 'pending',
     attempts        INTEGER DEFAULT 0,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

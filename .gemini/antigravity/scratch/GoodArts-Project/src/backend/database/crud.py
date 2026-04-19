@@ -106,6 +106,13 @@ async def get_user_artwork_ids(db: aiosqlite.Connection) -> set[int]:
         return {r[0] for r in await cur.fetchall()}
 
 
+async def get_recently_seen_artwork_ids(db: aiosqlite.Connection, days: int = 60) -> set[int]:
+    """Returns IDs of artworks interacted with within the last N days."""
+    sql = "SELECT DISTINCT artwork_id FROM user_artworks WHERE added_at >= datetime('now', ?)"
+    async with db.execute(sql, (f"-{days} days",)) as cur:
+        return {r[0] for r in await cur.fetchall()}
+
+
 async def get_rated_artworks(db: aiosqlite.Connection) -> list[dict]:
     """Artworks that the user has explicitly rated (seen with a rating)."""
     sql = """
@@ -203,7 +210,7 @@ async def get_stats(db: aiosqlite.Connection) -> dict:
         bucket_count = (await cur.fetchone())[0]
     async with db.execute("SELECT AVG(rating) FROM user_artworks WHERE list_type='seen' AND rating IS NOT NULL") as cur:
         avg_rating = (await cur.fetchone())[0] or 0
-    async with db.execute("SELECT COUNT(*) FROM museum_visits") as cur:
+    async with db.execute("SELECT COUNT(*) FROM visits") as cur:
         visit_count = (await cur.fetchone())[0]
     return {
         "seen_count": seen_count,
@@ -255,7 +262,7 @@ async def create_exhibition(db: aiosqlite.Connection, data: dict) -> int:
 
 async def get_exhibitions(db: aiosqlite.Connection, city: Optional[str] = None) -> list:
     if city:
-        sql = "SELECT * FROM exhibitions WHERE city = ? ORDER BY start_date"
+        sql = "SELECT * FROM exhibitions WHERE LOWER(city) = LOWER(?) ORDER BY start_date"
         async with db.execute(sql, (city,)) as cur:
             return [dict(r) for r in await cur.fetchall()]
     else:
@@ -407,4 +414,117 @@ async def update_settings(db: aiosqlite.Connection, data: dict):
     sets = ", ".join(f"{k}=?" for k in data.keys())
     vals = list(data.values())
     await db.execute(f"UPDATE user_settings SET {sets} WHERE id=1", vals)
+    await db.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOSSIER QUEUE
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def enqueue_dossier(db: aiosqlite.Connection, artwork_id: int, priority: int = 1) -> None:
+    """Add artwork to enrichment queue and create dossier placeholder. Idempotent."""
+    await db.execute(
+        """INSERT OR IGNORE INTO dossier_queue (artwork_id, priority, status, created_at)
+           VALUES (?, ?, 'pending', CURRENT_TIMESTAMP)""",
+        (artwork_id, priority),
+    )
+    await db.execute(
+        """INSERT OR IGNORE INTO artwork_dossier (artwork_id, status, queued_at)
+           VALUES (?, 'pending', CURRENT_TIMESTAMP)""",
+        (artwork_id,),
+    )
+    await db.commit()
+
+
+async def get_pending_queue_items(db: aiosqlite.Connection, limit: int = 5) -> list[dict]:
+    """Return up to `limit` pending queue items, highest priority first."""
+    async with db.execute(
+        """SELECT artwork_id, priority, attempts FROM dossier_queue
+           WHERE status = 'pending' AND attempts < 3
+           ORDER BY priority DESC, created_at ASC
+           LIMIT ?""",
+        (limit,),
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def mark_queue_processing(db: aiosqlite.Connection, artwork_id: int) -> None:
+    await db.execute(
+        """UPDATE dossier_queue
+           SET status = 'processing', last_attempted_at = CURRENT_TIMESTAMP,
+               attempts = attempts + 1
+           WHERE artwork_id = ?""",
+        (artwork_id,),
+    )
+    await db.commit()
+
+
+async def mark_queue_complete(db: aiosqlite.Connection, artwork_id: int) -> None:
+    await db.execute(
+        "UPDATE dossier_queue SET status = 'complete' WHERE artwork_id = ?",
+        (artwork_id,),
+    )
+    await db.commit()
+
+
+async def mark_queue_failed(db: aiosqlite.Connection, artwork_id: int, error: str) -> None:
+    await db.execute(
+        "UPDATE dossier_queue SET status = 'failed' WHERE artwork_id = ?",
+        (artwork_id,),
+    )
+    await db.execute(
+        """UPDATE artwork_dossier SET status = 'failed', error_message = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE artwork_id = ?""",
+        (error, artwork_id),
+    )
+    await db.commit()
+
+
+async def boost_dossier_priority(db: aiosqlite.Connection, artwork_id: int, priority: int = 10) -> None:
+    """Raise queue priority for an artwork (e.g., when it appears in the feed)."""
+    await db.execute(
+        """UPDATE dossier_queue SET priority = ?
+           WHERE artwork_id = ? AND status = 'pending'""",
+        (priority, artwork_id),
+    )
+    await db.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOSSIER DATA
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def get_dossier(db: aiosqlite.Connection, artwork_id: int) -> Optional[dict]:
+    async with db.execute(
+        "SELECT * FROM artwork_dossier WHERE artwork_id = ?", (artwork_id,)
+    ) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def upsert_dossier(db: aiosqlite.Connection, artwork_id: int, data: dict) -> None:
+    """Merge `data` dict into the artwork_dossier row for `artwork_id`."""
+    allowed = {
+        "artic_id", "medium_display", "technique_titles", "style_titles",
+        "subject_titles", "classification_titles", "physical_dimensions",
+        "inscriptions", "color_palette", "technique_definitions",
+        "movement_hierarchy", "movement_characteristics", "artist_influences",
+        "artist_influenced", "artist_bio", "artist_nationality",
+        "artist_birth_year", "artist_death_year", "data_sources",
+        "status", "completed_at", "error_message",
+    }
+    valid = {k: v for k, v in data.items() if k in allowed and v is not None}
+    if not valid:
+        return
+    valid["updated_at"] = "CURRENT_TIMESTAMP"
+    set_clause = ", ".join(
+        f"{k} = {v}" if k == "updated_at" else f"{k} = ?"
+        for k, v in valid.items()
+    )
+    params = [v for k, v in valid.items() if k != "updated_at"]
+    await db.execute(
+        f"UPDATE artwork_dossier SET {set_clause} WHERE artwork_id = ?",
+        [*params, artwork_id],
+    )
     await db.commit()

@@ -165,3 +165,28 @@ async def test_boost_dossier_priority(db):
     ) as cur:
         row = await cur.fetchone()
     assert row["priority"] == 10
+
+
+@pytest.mark.asyncio
+async def test_mark_queue_failed(db):
+    await db.execute("INSERT INTO artworks (title, source) VALUES ('Fail', 'manual')")
+    await db.commit()
+    async with db.execute("SELECT id FROM artworks WHERE title='Fail'") as cur:
+        artwork_id = (await cur.fetchone())["id"]
+
+    await crud.enqueue_dossier(db, artwork_id)
+    await crud.mark_queue_processing(db, artwork_id)
+    await crud.mark_queue_failed(db, artwork_id, "network timeout")
+
+    async with db.execute(
+        "SELECT status FROM dossier_queue WHERE artwork_id=?", (artwork_id,)
+    ) as cur:
+        q = await cur.fetchone()
+    assert q["status"] == "failed"
+
+    async with db.execute(
+        "SELECT status, error_message FROM artwork_dossier WHERE artwork_id=?", (artwork_id,)
+    ) as cur:
+        d = await cur.fetchone()
+    assert d["status"] == "failed"
+    assert d["error_message"] == "network timeout"

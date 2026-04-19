@@ -517,14 +517,10 @@ async def upsert_dossier(db: aiosqlite.Connection, artwork_id: int, data: dict) 
     valid = {k: v for k, v in data.items() if k in allowed and v is not None}
     if not valid:
         return
-    valid["updated_at"] = "CURRENT_TIMESTAMP"
-    set_clause = ", ".join(
-        f"{k} = {v}" if k == "updated_at" else f"{k} = ?"
-        for k, v in valid.items()
-    )
-    params = [v for k, v in valid.items() if k != "updated_at"]
+    set_clause = ", ".join(f"{k} = ?" for k in valid)
+    set_clause += ", updated_at = CURRENT_TIMESTAMP"
     await db.execute(
         f"UPDATE artwork_dossier SET {set_clause} WHERE artwork_id = ?",
-        [*params, artwork_id],
+        [*valid.values(), artwork_id],
     )
     await db.commit()

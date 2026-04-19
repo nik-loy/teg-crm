@@ -190,3 +190,20 @@ async def test_mark_queue_failed(db):
         d = await cur.fetchone()
     assert d["status"] == "failed"
     assert d["error_message"] == "network timeout"
+
+
+@pytest.mark.asyncio
+async def test_upsert_artwork_auto_enqueues_dossier(db):
+    artwork_id = await crud.upsert_artwork(db, {
+        "title": "Starry Night",
+        "artist": "Van Gogh",
+        "wikidata_id": "Q45585",
+        "source": "wikidata",
+    })
+
+    async with db.execute(
+        "SELECT status FROM dossier_queue WHERE artwork_id=?", (artwork_id,)
+    ) as cur:
+        row = await cur.fetchone()
+    assert row is not None, "upsert_artwork must auto-enqueue the dossier"
+    assert row["status"] == "pending"

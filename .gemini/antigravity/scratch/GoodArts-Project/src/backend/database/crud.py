@@ -39,7 +39,9 @@ async def upsert_artwork(db: aiosqlite.Connection, data: dict) -> int:
     """
     async with db.execute(sql, vals) as cur:
         await db.commit()
-        return cur.lastrowid or (await get_artwork_by_wikidata_id(db, data.get("wikidata_id")))["id"]
+        artwork_id = cur.lastrowid or (await get_artwork_by_wikidata_id(db, data.get("wikidata_id")))["id"]
+    await enqueue_dossier(db, artwork_id, priority=1)
+    return artwork_id
 
 
 async def search_artworks_local(db: aiosqlite.Connection, query: str, limit: int = 30) -> list[dict]:

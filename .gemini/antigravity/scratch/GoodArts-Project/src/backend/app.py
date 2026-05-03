@@ -14,11 +14,29 @@ from src.backend.api.routes import router
 from src.backend.config import settings
 
 
+import asyncio
+import aiosqlite
+from src.backend.engine.dossier_worker import dossier_worker_loop
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run startup tasks: ensure DB schema is ready."""
+    """Run startup tasks: ensure DB schema is ready, start background workers."""
     await run_migrations()
-    yield
+    
+    # Start the dossier worker
+    async with aiosqlite.connect(str(settings.DB_PATH)) as db_conn:
+        db_conn.row_factory = aiosqlite.Row
+        await db_conn.execute("PRAGMA foreign_keys=ON")
+        worker_task = asyncio.create_task(dossier_worker_loop(db_conn))
+        
+        yield
+        
+        # Shutdown
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -46,6 +64,17 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/cached-images", StaticFiles(directory=str(cache_dir)), name="cached-images")
 
 
+# -- Serve manifest and service worker from root -------------------------------
+@app.get("/manifest.json", include_in_schema=False)
+async def get_manifest():
+    return FileResponse(str(FRONTEND / "manifest.json"))
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def get_sw():
+    return FileResponse(str(FRONTEND / "sw.js"), media_type="application/javascript")
+
+
 @app.get("/", include_in_schema=False)
 async def root():
     return FileResponse(str(FRONTEND / "index.html"))
@@ -53,4 +82,9 @@ async def root():
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str):
+    # If the path looks like a static file (has an extension), don't return index.html
+    # This prevents MIME type errors for missing JS/CSS/images
+    if "." in full_path.split("/")[-1]:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
     return FileResponse(str(FRONTEND / "index.html"))

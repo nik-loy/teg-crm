@@ -77,6 +77,11 @@ class Settings:
     # -- Exhibition Sync -----------------------------------------------
     DEFAULT_CITY: str = "São Paulo"
     EXHIBITION_SYNC_INTERVAL: int = 86400
+    MUSEUM_RSS_FEEDS: list[str] = [
+        "https://www.tate.org.uk/whats-on/rss",
+        "https://www.moma.org/calendar/exhibitions/rss",
+        "https://www.britishmuseum.org/rss.xml"
+    ]
 
     def ensure_data_dir(self):
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

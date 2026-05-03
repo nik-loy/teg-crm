@@ -4,7 +4,7 @@ Tracks per-dimension affinity with decay, confidence, and sentiment awareness.
 """
 import math
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
@@ -156,7 +156,7 @@ async def get_taste_profile_dict(db: aiosqlite.Connection) -> dict[str, dict[str
 async def get_taste_profile_full(db: aiosqlite.Connection) -> dict[str, dict[str, dict]]:
     """Load profile with decay and confidence applied."""
     rows = await crud.get_taste_profile(db)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     profile: dict[str, dict[str, dict]] = defaultdict(dict)
 
     for row in rows:
@@ -167,7 +167,9 @@ async def get_taste_profile_full(db: aiosqlite.Connection) -> dict[str, dict[str
         if last_rating:
             try:
                 last_dt = datetime.fromisoformat(last_rating)
-                days_since = (now - last_dt).days
+                # SQLite stores datetimes as naive strings; compare consistently
+                now_cmp = now.replace(tzinfo=None) if last_dt.tzinfo is None else now
+                days_since = (now_cmp - last_dt).days
             except (ValueError, TypeError):
                 days_since = 0
         else:

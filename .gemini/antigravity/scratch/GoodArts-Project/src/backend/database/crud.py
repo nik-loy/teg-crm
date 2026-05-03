@@ -3,7 +3,7 @@ ArtLog CRUD — All database read/write operations.
 All functions accept an aiosqlite.Connection as first argument.
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import aiosqlite
 
@@ -168,7 +168,7 @@ async def get_cache(db: aiosqlite.Connection, cache_key: str) -> Optional[dict]:
 
 async def set_cache(db: aiosqlite.Connection, cache_key: str, source: str,
                     query: str, response: dict):
-    expires = (datetime.utcnow() + timedelta(days=settings.CACHE_TTL_DAYS)).isoformat()
+    expires = (datetime.now(timezone.utc) + timedelta(days=settings.CACHE_TTL_DAYS)).isoformat()
     sql = """
         INSERT INTO api_cache (cache_key, source, query, response_json, expires_at)
         VALUES (?, ?, ?, ?, ?)
@@ -251,7 +251,20 @@ async def get_enrichment(db: aiosqlite.Connection, artwork_id: int) -> Optional[
 # EXHIBITIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+import unicodedata
+
+def normalize_city_name(name: str) -> str:
+    """Strip accents and lowercase for robust city searching."""
+    if not name: return ""
+    name = "".join(c for c in unicodedata.normalize('NFD', name)
+                  if unicodedata.category(c) != 'Mn')
+    return name.lower().strip()
+
+
 async def create_exhibition(db: aiosqlite.Connection, data: dict) -> int:
+    if "city" in data and data["city"]:
+        data["normalized_city"] = normalize_city_name(data["city"])
+    
     cols = list(data.keys())
     vals = list(data.values())
     placeholders = ", ".join("?" * len(cols))
@@ -263,13 +276,53 @@ async def create_exhibition(db: aiosqlite.Connection, data: dict) -> int:
 
 
 async def get_exhibitions(db: aiosqlite.Connection, city: Optional[str] = None) -> list:
+    # Lazy backfill: ensure any rows missing normalized_city are fixed before querying
+    async with db.execute(
+        "SELECT id, city FROM exhibitions WHERE normalized_city IS NULL AND city IS NOT NULL"
+    ) as cur:
+        unfixed = await cur.fetchall()
+    for eid, raw_city in unfixed:
+        await db.execute(
+            "UPDATE exhibitions SET normalized_city=? WHERE id=?",
+            (normalize_city_name(raw_city), eid),
+        )
+    if unfixed:
+        await db.commit()
+
     if city:
-        sql = "SELECT * FROM exhibitions WHERE LOWER(city) = LOWER(?) ORDER BY start_date"
-        async with db.execute(sql, (city,)) as cur:
+        norm_city = normalize_city_name(city)
+        sql = """
+            SELECT e.*, ue.status
+            FROM exhibitions e
+            LEFT JOIN user_exhibitions ue ON e.id = ue.exhibition_id
+            WHERE e.normalized_city = ?
+               OR e.normalized_city LIKE ?
+               OR LOWER(e.city) = LOWER(?)
+            ORDER BY start_date
+        """
+        async with db.execute(sql, (norm_city, f"%{norm_city}%", city)) as cur:
             return [dict(r) for r in await cur.fetchall()]
     else:
-        async with db.execute("SELECT * FROM exhibitions ORDER BY start_date") as cur:
+        sql = """
+            SELECT e.*, ue.status
+            FROM exhibitions e
+            LEFT JOIN user_exhibitions ue ON e.id = ue.exhibition_id
+            ORDER BY start_date
+        """
+        async with db.execute(sql) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+
+async def get_exhibition(db: aiosqlite.Connection, exhibition_id: int) -> Optional[dict]:
+    sql = """
+        SELECT e.*, ue.status, ue.notes as personal_notes
+        FROM exhibitions e
+        LEFT JOIN user_exhibitions ue ON e.id = ue.exhibition_id
+        WHERE e.id = ?
+    """
+    async with db.execute(sql, (exhibition_id,)) as cur:
+        row = await cur.fetchone()
+        return dict(row) if row else None
 
 
 async def update_exhibition_affinity(db: aiosqlite.Connection, exhibition_id: int, affinity: float):
@@ -280,19 +333,26 @@ async def update_exhibition_affinity(db: aiosqlite.Connection, exhibition_id: in
     await db.commit()
 
 
-async def set_exhibition_status(db: aiosqlite.Connection, exhibition_id: int, status: str):
-    sql = """
-        INSERT INTO user_exhibitions (exhibition_id, status)
-        VALUES (?, ?)
-        ON CONFLICT(exhibition_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
-    """
-    try:
-        await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_exh_eid ON user_exhibitions(exhibition_id)"
-        )
-    except Exception:
-        pass
-    await db.execute(sql, (exhibition_id, status))
+async def set_exhibition_status(
+    db: aiosqlite.Connection, exhibition_id: int, status: str, notes: Optional[str] = None
+):
+    if notes is not None:
+        sql = """
+            INSERT INTO user_exhibitions (exhibition_id, status, notes)
+            VALUES (?, ?, ?)
+            ON CONFLICT(exhibition_id) DO UPDATE SET
+                status=excluded.status,
+                notes=excluded.notes,
+                updated_at=CURRENT_TIMESTAMP
+        """
+        await db.execute(sql, (exhibition_id, status, notes))
+    else:
+        sql = """
+            INSERT INTO user_exhibitions (exhibition_id, status)
+            VALUES (?, ?)
+            ON CONFLICT(exhibition_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
+        """
+        await db.execute(sql, (exhibition_id, status))
     await db.commit()
 
 
@@ -525,4 +585,35 @@ async def upsert_dossier(db: aiosqlite.Connection, artwork_id: int, data: dict) 
         f"UPDATE artwork_dossier SET {set_clause} WHERE artwork_id = ?",
         [*valid.values(), artwork_id],
     )
+    await db.commit()
+# ─────────────────────────────────────────────────────────────────────────────
+# PERSONAL LOGS
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def get_personal_logs(db: aiosqlite.Connection, artwork_id: Optional[int] = None,
+                             visit_id: Optional[int] = None) -> list[dict]:
+    if artwork_id:
+        sql = "SELECT * FROM personal_logs WHERE artwork_id=? ORDER BY created_at DESC"
+        async with db.execute(sql, (artwork_id,)) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+    elif visit_id:
+        sql = "SELECT * FROM personal_logs WHERE visit_id=? ORDER BY created_at DESC"
+        async with db.execute(sql, (visit_id,)) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+    return []
+
+
+async def create_personal_log(db: aiosqlite.Connection, data: dict) -> int:
+    cols = list(data.keys())
+    vals = list(data.values())
+    placeholders = ", ".join("?" * len(cols))
+    col_names = ", ".join(cols)
+    sql = f"INSERT INTO personal_logs ({col_names}) VALUES ({placeholders})"
+    async with db.execute(sql, vals) as cur:
+        await db.commit()
+        return cur.lastrowid
+
+
+async def delete_personal_log(db: aiosqlite.Connection, log_id: int):
+    await db.execute("DELETE FROM personal_logs WHERE id=?", (log_id,))
     await db.commit()

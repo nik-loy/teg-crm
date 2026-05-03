@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS exhibitions (
     description     TEXT,
     venue_name      TEXT,
     city            TEXT,
+    normalized_city TEXT,
     country         TEXT,
     start_date      DATE,
     end_date        DATE,
@@ -109,7 +110,8 @@ CREATE TABLE IF NOT EXISTS user_exhibitions (
     status          TEXT DEFAULT 'interested',
     notes           TEXT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP
+    updated_at      TIMESTAMP,
+    UNIQUE(exhibition_id)
 );
 
 CREATE TABLE IF NOT EXISTS visits (
@@ -165,6 +167,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     daily_masterpiece_id    INTEGER,
     daily_masterpiece_date  DATE,
     onboarding_done         BOOLEAN DEFAULT 0,
+    cma_fetch_offset        INTEGER DEFAULT 0,
     created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -224,6 +227,19 @@ CREATE TABLE IF NOT EXISTS dossier_queue (
 
 CREATE INDEX IF NOT EXISTS idx_dossier_queue_priority
     ON dossier_queue(status, priority DESC, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS personal_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    artwork_id      INTEGER REFERENCES artworks(id) ON DELETE CASCADE,
+    visit_id        INTEGER REFERENCES visits(id) ON DELETE CASCADE,
+    title           TEXT,
+    content         TEXT NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_personal_logs_artwork ON personal_logs(artwork_id);
+CREATE INDEX IF NOT EXISTS idx_personal_logs_visit   ON personal_logs(visit_id);
 """
 
 
@@ -232,6 +248,35 @@ async def run_migrations():
     settings.ensure_data_dir()
     async with aiosqlite.connect(str(settings.DB_PATH)) as db:
         await db.executescript(SCHEMA)
+        # 1. Add normalized_city to exhibitions
+        try:
+            await db.execute("ALTER TABLE exhibitions ADD COLUMN normalized_city TEXT")
+        except Exception:
+            pass
+
+        # 2. Add unique constraint to user_exhibitions (SQLite doesn't support ALTER TABLE for this easily)
+        # We'll create a new table, copy data (deduplicated), and rename.
+        try:
+            await db.execute("PRAGMA foreign_keys=OFF")
+            
+            # Deduplicate user_exhibitions
+            await db.execute("""
+                DELETE FROM user_exhibitions 
+                WHERE id NOT IN (
+                    SELECT MIN(id) 
+                    FROM user_exhibitions 
+                    GROUP BY exhibition_id
+                )
+            """)
+            # Ensure unique index exists
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_exh_eid_unique ON user_exhibitions(exhibition_id)")
+            await db.execute("PRAGMA foreign_keys=ON")
+        except Exception as e:
+            print(f"Migration error (user_exhibitions): {e}")
+
+        # 3. Populate normalized_city — runs AFTER seeding (see below)
+
+        # 4. Handle other missing columns
         for col, typ in [
             ("thumbnail_path", "TEXT"),
             ("dominant_color", "TEXT"),
@@ -295,5 +340,25 @@ async def run_migrations():
             )
         except Exception:
             pass
+
+        # 3 (deferred). Populate normalized_city for ALL exhibitions including newly seeded ones
+        import unicodedata
+        def norm(s):
+            if not s: return ""
+            return "".join(
+                c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn'
+            ).lower().strip()
+
+        async with db.execute(
+            "SELECT id, city FROM exhibitions WHERE normalized_city IS NULL AND city IS NOT NULL"
+        ) as cur:
+            rows = await cur.fetchall()
+            for eid, city in rows:
+                await db.execute(
+                    "UPDATE exhibitions SET normalized_city=? WHERE id=?", (norm(city), eid)
+                )
+
         await db.commit()
     print("Database schema is up to date.")
+

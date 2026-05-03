@@ -88,7 +88,7 @@ def _parse_artwork(binding: dict) -> dict:
     }
 
 
-async def search_wikidata(query: str, limit: int = 20) -> list[dict]:
+async def search_wikidata(query: str, limit: int = 40) -> list[dict]:
     """Search artworks on Wikidata by title or artist keyword."""
     sparql_query = f"""
     SELECT DISTINCT ?item ?itemLabel ?creatorLabel ?image ?inception
@@ -101,7 +101,7 @@ async def search_wikidata(query: str, limit: int = 20) -> list[dict]:
         ?item wdt:P170 ?creator.
         ?creator rdfs:label ?clbl FILTER(LANG(?clbl) = "en" && CONTAINS(LCASE(?clbl), LCASE("{query}")))
       }}
-      OPTIONAL {{ ?item wdt:P18 ?image. }}
+      ?item wdt:P18 ?image.
       OPTIONAL {{ ?item wdt:P571 ?inception. }}
       OPTIONAL {{ ?item wdt:P135 ?movement. }}
       OPTIONAL {{ ?item wdt:P186 ?medium. }}
@@ -180,4 +180,61 @@ async def explore_wikidata(movement: str, limit: int = 15) -> list[dict]:
         except Exception as e:
             print(f"Explore query failed for {movement}: {str(e)}")
             return []
+
+
+async def get_movement_hierarchy(movement_name: str) -> Optional[str]:
+    """Fetch broader movements and characteristics for a given movement."""
+    query = f"""
+    SELECT ?movement ?movementLabel ?broaderLabel ?desc
+    WHERE {{
+      ?movement rdfs:label ?mlbl FILTER(LANG(?mlbl) = "en" && LCASE(?mlbl) = LCASE("{movement_name}"))
+      OPTIONAL {{ ?movement wdt:P31 ?broader. ?broader rdfs:label ?broaderLabel. FILTER(LANG(?broaderLabel) = "en") }}
+      OPTIONAL {{ ?movement schema:description ?desc FILTER(LANG(?desc) = "en") }}
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+    }}
+    LIMIT 5
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(SPARQL, params={"query": query, "format": "json"}, headers=HEADERS)
+            resp.raise_for_status()
+            data = resp.json()
+        bindings = data.get("results", {}).get("bindings", [])
+        if not bindings: return None
+        
+        broader = list(set(b.get("broaderLabel", {}).get("value") for b in bindings if "broaderLabel" in b))
+        desc = bindings[0].get("desc", {}).get("value")
+        
+        import json
+        return json.dumps({"broader": broader, "description": desc})
+    except Exception:
+        return None
+
+
+async def get_artist_influences(artist_name: str) -> Optional[dict]:
+    """Fetch who influenced this artist and who they influenced."""
+    query = f"""
+    SELECT ?artist ?influencedByLabel ?influencedLabel
+    WHERE {{
+      ?artist rdfs:label ?albl FILTER(LANG(?albl) = "en" && LCASE(?albl) = LCASE("{artist_name}"))
+      OPTIONAL {{ ?artist wdt:P737 ?influencedBy. ?influencedBy rdfs:label ?influencedByLabel. FILTER(LANG(?influencedByLabel) = "en") }}
+      OPTIONAL {{ ?influencing wdt:P737 ?artist. ?influencing rdfs:label ?influencedLabel. FILTER(LANG(?influencedLabel) = "en") }}
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+    }}
+    LIMIT 10
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(SPARQL, params={"query": query, "format": "json"}, headers=HEADERS)
+            resp.raise_for_status()
+            data = resp.json()
+        bindings = data.get("results", {}).get("bindings", [])
+        if not bindings: return None
+        
+        inf_by = list(set(b.get("influencedByLabel", {}).get("value") for b in bindings if "influencedByLabel" in b))
+        inf = list(set(b.get("influencedLabel", {}).get("value") for b in bindings if "influencedLabel" in b))
+        
+        return {"influenced_by": inf_by, "influenced": inf}
+    except Exception:
+        return None
 

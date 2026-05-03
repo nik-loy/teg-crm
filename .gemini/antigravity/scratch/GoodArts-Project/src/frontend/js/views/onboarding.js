@@ -50,7 +50,7 @@ window.Onboarding = (function() {
         el.innerHTML = `
             <div class="swipe-card-img-wrap">
                 ${imgUrl
-                    ? `<img src="${imgUrl}" alt="${artwork.title}" draggable="false" onerror="this.style.display='none'">`
+                    ? `<img src="${window.API.proxyImage(imgUrl)}" alt="${artwork.title}" draggable="false" onerror="this.style.display='none'">`
                     : `<div class="swipe-card-placeholder">◎</div>`
                 }
                 <div class="swipe-card-gradient"></div>

@@ -13,7 +13,7 @@ window.Components.ArtworkCard = function (artwork, reasons) {
     if (imgUrl) {
         var img = document.createElement('img');
         img.className = 'artwork-img';
-        img.src = imgUrl;
+        img.src = window.API.proxyImage(imgUrl);
         img.alt = artwork.title || '';
         img.loading = 'lazy';
         imgWrap.appendChild(img);

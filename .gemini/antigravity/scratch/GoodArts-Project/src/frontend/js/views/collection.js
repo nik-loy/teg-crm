@@ -65,6 +65,8 @@ window.CollectionView = {
             var list=document.createElement("div"); list.className="visits-list";
             visits.forEach(function(v){
                 var card=document.createElement("div"); card.className="visit-card";
+                card.style.cursor="pointer";
+                card.onclick=function(){window.viewVisitDetails(v.id);};
                 var h3=document.createElement("h3"); h3.textContent=v.venue_name||"Unknown Museum";
                 var m=document.createElement("p"); m.textContent=[v.city,v.country,v.visit_date].filter(Boolean).join(" · ");
                 card.appendChild(h3); card.appendChild(m);

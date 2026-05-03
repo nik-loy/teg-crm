@@ -17,6 +17,7 @@ window.SearchView = {
         results.id = 'search-results'; results.className = 'search-results-grid mb-2';
 
         var collHeading = document.createElement('h2');
+        collHeading.id = 'explore-heading';
         collHeading.className = 'section-heading'; collHeading.style.marginTop = '2rem';
         collHeading.textContent = 'Browse Collections';
 
@@ -32,9 +33,18 @@ window.SearchView = {
         inp.addEventListener('input', function(e) {
             clearTimeout(timeout);
             var q = e.target.value.trim();
+            var cEl = document.getElementById('explore-collections');
+            var cHeading = document.getElementById('explore-heading');
+            
             if (q.length < 2) {
-                results.textContent = ''; status.textContent = ''; return;
+                results.textContent = ''; status.textContent = ''; 
+                if (cEl) cEl.style.display = 'block';
+                if (cHeading) cHeading.style.display = 'block';
+                return;
             }
+            if (cEl) cEl.style.display = 'none';
+            if (cHeading) cHeading.style.display = 'none';
+
             status.textContent = 'Searching archives…';
             timeout = setTimeout(function() { self.performSearch(q); }, 600);
         });
@@ -49,7 +59,26 @@ window.SearchView = {
         try {
             var data = await window.API.get('/search?q=' + encodeURIComponent(q));
             var all = (data.local || []).concat(data.remote || []);
-            if (statusEl) statusEl.textContent = 'Found ' + all.length + ' result' + (all.length !== 1 ? 's' : '') + '.';
+            if (statusEl) {
+                statusEl.textContent = 'Found ' + all.length + ' result' + (all.length !== 1 ? 's' : '') + '.';
+                if (data.suggestion) {
+                    var suggSpan = document.createElement('span');
+                    suggSpan.textContent = ' Did you mean ';
+                    var suggLink = document.createElement('a');
+                    suggLink.textContent = data.suggestion;
+                    suggLink.style.cssText = 'color:var(--color-accent);cursor:pointer;text-decoration:underline;font-weight:bold;';
+                    suggLink.onclick = function() {
+                        var inp = document.getElementById('search-input');
+                        if (inp) {
+                            inp.value = data.suggestion;
+                            inp.dispatchEvent(new Event('input'));
+                        }
+                    };
+                    suggSpan.appendChild(suggLink);
+                    suggSpan.appendChild(document.createTextNode('?'));
+                    statusEl.appendChild(suggSpan);
+                }
+            }
             if (resultsEl) {
                 resultsEl.textContent = '';
                 if (all.length === 0) {

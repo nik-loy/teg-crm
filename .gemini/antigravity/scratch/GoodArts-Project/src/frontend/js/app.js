@@ -7,10 +7,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!onboardingDone) {
         try {
             const profile = await window.API.get("/taste-profile");
-            if (Object.keys(profile).length === 0) {
-                window.Onboarding && window.Onboarding.init();
-                updateNavStats();
-                return;
+            if (Object.keys(profile).length === 0 && window.Onboarding) {
+                window.Onboarding.init();
             }
         } catch (e) {
             console.warn("Could not fetch taste profile, skipping onboarding check.");
@@ -20,9 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.initRouter();
     updateNavStats();
 
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/static/sw.js").catch(function() {});
-    }
+    // SW already registered in index.html inline script
 });
 
 function initRouter() {
@@ -77,15 +73,35 @@ async function updateNavStats() {
 window.updateNavStats = updateNavStats;
 
 window.closeModal = function() {
-    var modal = document.getElementById("artwork-modal");
-    if (modal) modal.classList.add("hidden");
+    ["artwork-modal", "capture-modal"].forEach(function(id) {
+        var m = document.getElementById(id);
+        if (m) m.classList.add("hidden");
+    });
 };
 
 document.addEventListener("DOMContentLoaded", function() {
+    // Close button for artwork modal
     var closeBtn = document.getElementById("modal-close");
     if (closeBtn) closeBtn.addEventListener("click", window.closeModal);
-    var modal = document.getElementById("artwork-modal");
-    if (modal) modal.addEventListener("click", function(e) { if (e.target === modal) window.closeModal(); });
+
+    // Backdrop click closes artwork-modal
+    var artModal = document.getElementById("artwork-modal");
+    if (artModal) artModal.addEventListener("click", function(e) {
+        if (e.target === artModal) window.closeModal();
+    });
+
+    // Backdrop click closes capture-modal
+    var captureModal = document.getElementById("capture-modal");
+    if (captureModal) captureModal.addEventListener("click", function(e) {
+        if (e.target === captureModal) captureModal.classList.add("hidden");
+    });
+
+    // ESC key closes any open modal
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") window.closeModal();
+    });
+
+    // FAB opens photo capture
     var fab = document.getElementById("fab-capture");
     if (fab) fab.addEventListener("click", function() { window.PhotoUpload && window.PhotoUpload.openCapture(); });
 });

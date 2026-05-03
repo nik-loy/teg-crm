@@ -42,14 +42,15 @@ async def test_search_rijksmuseum_with_mock():
         ]
     }
     mock_resp.raise_for_status = MagicMock()
+
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get.return_value = mock_resp
-    with patch("src.backend.clients.rijksmuseum.httpx.AsyncClient", return_value=mock_client), \
-         patch("src.backend.clients.rijksmuseum.settings") as mock_settings:
-        mock_settings.RIJKSMUSEUM_API_KEY = "test-key"
-        mock_settings.RIJKSMUSEUM_API_URL = "https://www.rijksmuseum.nl/api/en/collection"
-        results = await search_rijksmuseum("test")
+
+    with patch("src.backend.clients.rijksmuseum.httpx.AsyncClient", return_value=mock_client):
+        # We need to make sure settings has an API key for the mock to run
+        with patch("src.backend.clients.rijksmuseum.settings.RIJKSMUSEUM_API_KEY", "test-key"):
+            results = await search_rijksmuseum("test")
     assert len(results) == 1
     assert results[0]["title"] == "Test Art"

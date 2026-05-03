@@ -2,7 +2,7 @@
 ArtLog — Pydantic Schemas
 All request/response models for the API.
 """
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 
@@ -124,6 +124,7 @@ class StatsOut(BaseModel):
 class SearchResult(BaseModel):
     local: list[ArtworkOut] = []
     remote: list[ArtworkBase] = []
+    suggestion: Optional[str] = None
 
 
 # ─── Recommendations ─────────────────────────────────────────────────────────
@@ -214,8 +215,17 @@ class ExhibitionOut(ExhibitionCreate):
     model_config = {"from_attributes": True}
 
 
+class ExhibitionDetailOut(ExhibitionOut):
+    recommended_artworks: list[ArtworkOut] = []
+    recommended_artists: list[str] = []
+    all_artworks: list[ArtworkOut] = []
+    personal_notes: Optional[str] = None
+    status: Optional[str] = "interested"
+
+
 class ExhibitionStatusUpdate(BaseModel):
-    status: str = Field(..., pattern="^(interested|attending|visited)$")
+    status: str = Field(..., pattern="^(interested|attending|visited|none)$")
+    notes: Optional[str] = None
 
 
 # ─── Visits ──────────────────────────────────────────────────────────────────
@@ -255,6 +265,21 @@ class AnnotationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─── Personal Logs ───────────────────────────────────────────────────────────
+
+class PersonalLogCreate(BaseModel):
+    artwork_id: Optional[int] = None
+    visit_id: Optional[int] = None
+    title: Optional[str] = None
+    content: str
+
+class PersonalLogOut(PersonalLogCreate):
+    id: int
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 class SettingsOut(BaseModel):
@@ -270,3 +295,21 @@ class SettingsUpdate(BaseModel):
     home_city: Optional[str] = None
     home_country: Optional[str] = None
     temp_city: Optional[str] = None
+
+
+# ─── Technical Dossier ───────────────────────────────────────────────────────
+
+class DossierOut(BaseModel):
+    """Response model for GET /artworks/{id}/dossier."""
+    status: str  # "complete" | "enriching" | "unavailable"
+    artwork_id: Optional[int] = None
+    data_sources: Optional[list[str]] = None
+    materials: Optional[dict[str, Any]] = None
+    physical: Optional[dict[str, Any]] = None
+    color_palette: Optional[list[dict]] = None
+    classification: Optional[dict[str, Any]] = None
+    movement: Optional[dict[str, Any]] = None
+    lineage: Optional[dict[str, Any]] = None
+    artist: Optional[dict[str, Any]] = None
+
+    model_config = {"from_attributes": True}

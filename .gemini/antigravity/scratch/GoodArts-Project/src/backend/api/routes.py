@@ -5,7 +5,7 @@ All REST endpoints for the application.
 import asyncio
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 import aiosqlite
@@ -30,10 +30,11 @@ from src.backend.api.schemas import (
     OnboardingRateRequest, OnboardingArtwork,
     StatsOut, SearchResult,
     FeedItem, TasteSignal, EnrichmentOut,
-    ExhibitionCreate, ExhibitionOut, ExhibitionStatusUpdate,
+    ExhibitionCreate, ExhibitionOut, ExhibitionDetailOut, ExhibitionStatusUpdate,
     VisitCreate, VisitOut,
     AnnotationCreate, AnnotationOut,
-    SettingsOut, SettingsUpdate,
+    PersonalLogCreate, PersonalLogOut,
+    SettingsOut, SettingsUpdate, DossierOut,
 )
 
 router = APIRouter()
@@ -55,6 +56,26 @@ async def get_stats(db: aiosqlite.Connection = Depends(get_db)):
 
 # ─── Search ──────────────────────────────────────────────────────────────────
 
+import difflib
+
+POPULAR_SEARCH_TERMS = [
+    "Vincent van Gogh", "Leonardo da Vinci", "Pablo Picasso", "Claude Monet",
+    "Rembrandt van Rijn", "Michelangelo", "Johannes Vermeer", "Edvard Munch",
+    "Salvador Dali", "Gustav Klimt", "Frida Kahlo", "Georgia O'Keeffe",
+    "Diego Rivera", "Jackson Pollock", "Andy Warhol", "Henri Matisse",
+    "Paul Cezanne", "Edgar Degas", "Titian", "Raphael", "Caravaggio",
+    "Peter Paul Rubens", "Francisco Goya", "Edouard Manet", "Pierre-Auguste Renoir",
+    "Paul Gauguin", "Georges Seurat", "Henri de Toulouse-Lautrec", "Marc Chagall",
+    "Wassily Kandinsky", "Piet Mondrian", "Rene Magritte", "Joan Miro",
+    "Mark Rothko", "Edward Hopper", "Giotto", "Sandro Botticelli",
+    "Hieronymus Bosch", "Pieter Bruegel the Elder", "El Greco", "Diego Velazquez",
+    "J.M.W. Turner", "John Constable", "Caspar David Friedrich", "Eugene Delacroix",
+    "Gustave Courbet", "Camille Pissarro", "Alfred Sisley", "Mary Cassatt",
+    "Berthe Morisot", "Auguste Rodin", "Paul Klee", "Amedeo Modigliani",
+    "Egon Schiele", "Marcel Duchamp", "Kazimir Malevich", "Max Ernst",
+    "Impressionism", "Renaissance", "Baroque", "Cubism", "Surrealism", "Modernism"
+]
+
 @router.get("/search", response_model=SearchResult)
 async def search(
     q: str = Query(..., min_length=1),
@@ -62,10 +83,24 @@ async def search(
 ):
     local = await crud.search_artworks_local(db, q)
 
-    # Parallel fetch from Wikidata + Europeana
+    # Parallel fetch from Wikidata + Europeana — each provider fails independently
+    async def _safe_wikidata(query: str) -> list:
+        try:
+            return await search_wikidata(query)
+        except Exception as exc:
+            print(f"[search] Wikidata failed for '{query}': {exc}")
+            return []
+
+    async def _safe_europeana(query: str) -> list:
+        try:
+            return await search_europeana(query)
+        except Exception as exc:
+            print(f"[search] Europeana failed for '{query}': {exc}")
+            return []
+
     wikidata_results, europeana_results = await asyncio.gather(
-        search_wikidata(q),
-        search_europeana(q),
+        _safe_wikidata(q),
+        _safe_europeana(q),
     )
 
     # Deduplicate remote results by wikidata_id
@@ -78,7 +113,17 @@ async def search(
             seen_ids.add(wid)
             remote.append(item)
 
-    return {"local": local, "remote": remote}
+    suggestion = None
+    if len(local) + len(remote) < 5:
+        q_lower = q.lower()
+        terms_lower = {t.lower(): t for t in POPULAR_SEARCH_TERMS}
+        matches = difflib.get_close_matches(q_lower, terms_lower.keys(), n=1, cutoff=0.7)
+        if matches:
+            matched_term = terms_lower[matches[0]]
+            if matched_term.lower() != q_lower:
+                suggestion = matched_term
+
+    return {"local": local, "remote": remote, "suggestion": suggestion}
 
 
 # ─── Explore ─────────────────────────────────────────────────────────────────
@@ -87,13 +132,18 @@ async def search(
 async def explore():
     """Fetch random notable artworks categorized by movements."""
     import random
-    movements = ["Impressionism", "Renaissance", "Surrealism", "Baroque", "Romanticism", "Post-Impressionism"]
-    chosen = random.sample(movements, 2)
+    movements = [
+        "Impressionism", "Post-Impressionism", "Renaissance", "Baroque",
+        "Romanticism", "Surrealism", "Cubism", "Expressionism",
+        "Realism", "Abstract Expressionism", "Minimalism", "Symbolism",
+        "Art Nouveau", "Neoclassicism", "Fauvism", "Mannerism",
+    ]
+    chosen = random.sample(movements, 4)
     results = await asyncio.gather(*[explore_wikidata(m) for m in chosen])
     return {
         "categories": [
-            {"name": f"Explore {chosen[0]}", "artworks": results[0]},
-            {"name": f"Explore {chosen[1]}", "artworks": results[1]},
+            {"name": chosen[i], "artworks": results[i]}
+            for i in range(len(chosen))
         ]
     }
 
@@ -145,6 +195,72 @@ async def get_enriched(artwork_id: int, db: aiosqlite.Connection = Depends(get_d
         raise HTTPException(status_code=404, detail="Could not enrich artwork")
     enrichment["artwork_id"] = artwork_id
     return enrichment
+
+
+# ─── Technical Dossier ───────────────────────────────────────────────────────
+
+@router.get("/artworks/{artwork_id}/dossier", response_model=DossierOut)
+async def get_dossier(artwork_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    row = await crud.get_dossier(db, artwork_id)
+
+    if row is None:
+        # Artwork exists but was never queued — enqueue now
+        artwork = await crud.get_artwork(db, artwork_id)
+        if not artwork:
+            raise HTTPException(status_code=404, detail="Artwork not found")
+        await crud.enqueue_dossier(db, artwork_id, priority=10)
+        return DossierOut(status="enriching", artwork_id=artwork_id)
+
+    status = row.get("status", "pending")
+    if status in ("pending", "processing"):
+        return DossierOut(status="enriching", artwork_id=artwork_id)
+    if status in ("failed", "unavailable"):
+        return DossierOut(status="unavailable", artwork_id=artwork_id)
+
+    # status == "complete" — build structured response
+    def _json(val) -> Any:
+        if val is None:
+            return None
+        try:
+            import json
+            return json.loads(val)
+        except Exception:
+            return val
+
+    return DossierOut(
+        status="complete",
+        artwork_id=artwork_id,
+        data_sources=_json(row.get("data_sources")),
+        materials={
+            "medium_display": row.get("medium_display"),
+            "technique_titles": _json(row.get("technique_titles")),
+            "technique_definitions": _json(row.get("technique_definitions")),
+        } if any([row.get("medium_display"), row.get("technique_titles")]) else None,
+        physical={
+            "dimensions": row.get("physical_dimensions"),
+            "inscriptions": row.get("inscriptions"),
+        } if any([row.get("physical_dimensions"), row.get("inscriptions")]) else None,
+        color_palette=_json(row.get("color_palette")),
+        classification={
+            "style_titles": _json(row.get("style_titles")),
+            "subject_titles": _json(row.get("subject_titles")),
+            "classification_titles": _json(row.get("classification_titles")),
+        } if any([row.get("style_titles"), row.get("subject_titles"), row.get("classification_titles")]) else None,
+        movement={
+            "hierarchy": _json(row.get("movement_hierarchy")),
+            "characteristics": row.get("movement_characteristics"),
+        } if any([row.get("movement_hierarchy"), row.get("movement_characteristics")]) else None,
+        lineage={
+            "influenced_by": _json(row.get("artist_influences")),
+            "influenced": _json(row.get("artist_influenced")),
+        } if any([row.get("artist_influences"), row.get("artist_influenced")]) else None,
+        artist={
+            "bio": row.get("artist_bio"),
+            "nationality": row.get("artist_nationality"),
+            "birth_year": row.get("artist_birth_year"),
+            "death_year": row.get("artist_death_year"),
+        } if any([row.get("artist_bio"), row.get("artist_nationality")]) else None,
+    )
 
 
 # ─── Annotations ─────────────────────────────────────────────────────────────
@@ -388,7 +504,43 @@ async def get_exhibitions(
     city: Optional[str] = None,
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    return await crud.get_exhibitions(db, city=city)
+    try:
+        exhs = await crud.get_exhibitions(db, city=city)
+        
+        # Auto-sync if no results found locally for a city
+        if not exhs and city:
+            from src.backend.jobs.exhibition_sync import sync_exhibitions
+            new_count = await sync_exhibitions(db, city=city)
+            if new_count > 0:
+                exhs = await crud.get_exhibitions(db, city=city)
+        
+        profile = await get_taste_profile_dict(db)
+        
+        import json
+        for exh in exhs:
+            try:
+                tags = []
+                try:
+                    atags = exh.get("artist_tags")
+                    mtags = exh.get("movement_tags")
+                    tags = json.loads(atags or "[]") + json.loads(mtags or "[]")
+                except Exception:
+                    pass
+                
+                score = 0.0
+                for tag in tags:
+                    for dim in ["artist", "movement"]:
+                        if dim in profile and tag in profile[dim]:
+                            score = max(score, profile[dim][tag])
+                exh["taste_affinity"] = score
+            except Exception:
+                exh["taste_affinity"] = 0.0
+        
+        return exhs
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/exhibitions", response_model=ExhibitionOut)
@@ -402,13 +554,83 @@ async def create_exhibition(
     return next(e for e in exhs if e["id"] == eid)
 
 
+@router.get("/exhibitions/{exhibition_id}", response_model=ExhibitionDetailOut)
+async def get_exhibition_detail(
+    exhibition_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    exh = await crud.get_exhibition(db, exhibition_id)
+    if not exh:
+        raise HTTPException(status_code=404, detail="Exhibition not found")
+
+    # Get personalized recommendations
+    from src.backend.engine.recommender import recommend_for_exhibition
+    recs = await recommend_for_exhibition(db, exh)
+
+    # Get "all" artworks (Research Tool)
+    import json
+    try:
+        exh_artists = json.loads(exh.get("artist_tags") or "[]")
+    except Exception:
+        exh_artists = []
+
+    all_artworks = []
+    
+    # Try Artsy first if it's an Artsy show
+    if exh.get("source") == "artsy" and exh.get("source_id"):
+        from src.backend.clients.artsy import fetch_show_artworks
+        artsy_works = await fetch_show_artworks(exh["source_id"])
+        for aw in artsy_works:
+            all_artworks.append({
+                "id": 0,
+                "title": aw["title"],
+                "artist": aw.get("artist"),
+                "image_url": aw.get("image_url"),
+                "year": aw.get("year"),
+                "source": "artsy",
+                "wikidata_id": None
+            })
+
+    # Supplement with local artworks matching artists
+    all_local = await crud.get_all_artworks(db)
+    local_matches = [a for a in all_local if a.get("artist") in exh_artists]
+    for lm in local_matches:
+        if not any(a.get("title") == lm.get("title") for a in all_artworks):
+            all_artworks.append(lm)
+
+    # Fallback to Wikidata if still empty
+    if not all_artworks and exh_artists:
+        from src.backend.clients.wikidata import search_wikidata
+        try:
+            remote_results = await search_wikidata(exh_artists[0])
+            for r in remote_results[:10]:
+                all_artworks.append({
+                    "id": 0,
+                    "title": r["title"],
+                    "artist": r.get("artist"),
+                    "image_url": r.get("image_url"),
+                    "year": r.get("year"),
+                    "source": "wikidata",
+                    "wikidata_id": r.get("wikidata_id")
+                })
+        except Exception:
+            pass
+
+    return {
+        **exh,
+        "recommended_artworks": recs["recommended_artworks"],
+        "recommended_artists": recs["recommended_artists"],
+        "all_artworks": all_artworks,
+    }
+
+
 @router.patch("/exhibitions/{exhibition_id}/status")
 async def update_exhibition_status(
     exhibition_id: int,
     payload: ExhibitionStatusUpdate,
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    await crud.set_exhibition_status(db, exhibition_id, payload.status)
+    await crud.set_exhibition_status(db, exhibition_id, payload.status, payload.notes)
     return {"updated": True}
 
 
@@ -489,3 +711,29 @@ async def sync_exhibitions_route(db: aiosqlite.Connection = Depends(get_db)):
     from src.backend.jobs.exhibition_sync import sync_exhibitions
     await sync_exhibitions(db)
     return {"synced": True}
+# ─── Personal Logs ───────────────────────────────────────────────────────────
+
+@router.get("/logs", response_model=list[PersonalLogOut])
+async def get_logs(
+    artwork_id: Optional[int] = None,
+    visit_id: Optional[int] = None,
+    db: aiosqlite.Connection = Depends(get_db)
+):
+    return await crud.get_personal_logs(db, artwork_id=artwork_id, visit_id=visit_id)
+
+
+@router.post("/logs", response_model=PersonalLogOut)
+async def create_log(
+    payload: PersonalLogCreate,
+    db: aiosqlite.Connection = Depends(get_db)
+):
+    data = payload.model_dump(exclude_none=True)
+    log_id = await crud.create_personal_log(db, data)
+    logs = await crud.get_personal_logs(db, artwork_id=payload.artwork_id, visit_id=payload.visit_id)
+    return next(l for l in logs if l["id"] == log_id)
+
+
+@router.delete("/logs/{log_id}")
+async def delete_log(log_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    await crud.delete_personal_log(db, log_id)
+    return {"deleted": True}

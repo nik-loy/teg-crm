@@ -18,6 +18,7 @@ def _iiif_url(image_id: str, full_res: bool = False) -> str:
 def _parse_artwork(data: dict) -> dict:
     image_id = data.get("image_id")
     year = data.get("date_end")
+
     return {
         "title": data.get("title", "Untitled"),
         "artist": data.get("artist_title"),
@@ -35,7 +36,7 @@ def _parse_artwork(data: dict) -> dict:
     }
 
 
-async def search_artic(query: str, limit: int = 20) -> list:
+async def search_artic(query: str, limit: int = 20) -> list[dict]:
     """Search Art Institute of Chicago. No API key needed."""
     params = {
         "q": query,
@@ -46,4 +47,5 @@ async def search_artic(query: str, limit: int = 20) -> list:
         resp = await client.get(f"{settings.ARTIC_API_URL}/search", params=params)
         resp.raise_for_status()
         data = resp.json()
+
     return [_parse_artwork(item) for item in data.get("data", []) if item.get("image_id")]

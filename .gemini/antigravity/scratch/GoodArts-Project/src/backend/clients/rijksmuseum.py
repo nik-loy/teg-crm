@@ -1,6 +1,7 @@
 """
 GoodArts — Rijksmuseum API Client
 Tier 1 provider: highest quality Dutch/Flemish art with 4500px tile images.
+Requires API key from data.rijksmuseum.nl.
 """
 import httpx
 from src.backend.config import settings
@@ -11,8 +12,11 @@ def _parse_artwork(obj: dict) -> dict:
     web_image = obj.get("webImage") or {}
     dating = obj.get("dating") or {}
     year = dating.get("sortingDate")
+
     image_url = web_image.get("url")
+    # Rijksmuseum supports =sN suffix for size. Remove to get max resolution.
     image_url_hd = image_url.replace("=s0", "") if image_url else None
+
     return {
         "title": obj.get("title", "Untitled"),
         "artist": obj.get("principalOrFirstMaker"),
@@ -28,10 +32,11 @@ def _parse_artwork(obj: dict) -> dict:
     }
 
 
-async def search_rijksmuseum(query: str, limit: int = 20) -> list:
+async def search_rijksmuseum(query: str, limit: int = 20) -> list[dict]:
     """Search Rijksmuseum collection. Returns empty list if no API key."""
     if not settings.RIJKSMUSEUM_API_KEY:
         return []
+
     params = {
         "key": settings.RIJKSMUSEUM_API_KEY,
         "q": query,
@@ -44,4 +49,5 @@ async def search_rijksmuseum(query: str, limit: int = 20) -> list:
         resp = await client.get(settings.RIJKSMUSEUM_API_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
+
     return [_parse_artwork(obj) for obj in data.get("artObjects", []) if obj.get("webImage")]

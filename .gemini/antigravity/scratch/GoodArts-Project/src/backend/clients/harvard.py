@@ -1,6 +1,7 @@
 """
 GoodArts — Harvard Art Museums API Client
 Tier 1 provider: broad collection with IIIF max-resolution images.
+Requires API key from harvardartmuseums.org/collections/api.
 """
 import httpx
 from src.backend.config import settings
@@ -17,10 +18,13 @@ def _parse_artwork(record: dict) -> dict:
             year = int(str(dated)[:4])
         except (ValueError, TypeError):
             pass
+
     primary = record.get("primaryimageurl")
+    # Harvard supports IIIF: append /full/full/0/default.jpg for max res
     image_url_hd = primary
     if primary and "iiif" in primary.lower():
         image_url_hd = primary.rsplit("?", 1)[0]
+
     return {
         "title": record.get("title", "Untitled"),
         "artist": artist,
@@ -38,10 +42,11 @@ def _parse_artwork(record: dict) -> dict:
     }
 
 
-async def search_harvard(query: str, limit: int = 20) -> list:
+async def search_harvard(query: str, limit: int = 20) -> list[dict]:
     """Search Harvard Art Museums. Returns empty list if no API key."""
     if not settings.HARVARD_API_KEY:
         return []
+
     params = {
         "apikey": settings.HARVARD_API_KEY,
         "q": query,
@@ -55,5 +60,6 @@ async def search_harvard(query: str, limit: int = 20) -> list:
         resp = await client.get(settings.HARVARD_API_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
+
     records = data.get("records", [])
     return [_parse_artwork(r) for r in records if r.get("primaryimageurl")]

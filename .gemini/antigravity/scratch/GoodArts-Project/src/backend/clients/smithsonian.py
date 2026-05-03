@@ -1,17 +1,24 @@
-"""GoodArts — Smithsonian API Client. Requires API key."""
+"""
+GoodArts — Smithsonian API Client
+Tier 2 provider: American art, 14M+ objects.
+Requires API key from api.si.edu.
+"""
 import httpx
 from src.backend.config import settings
 from src.backend.clients.wikidata import _derive_era
 
 
-def _parse_result(row: dict):
+def _parse_result(row: dict) -> dict | None:
     content = row.get("content", {})
     desc = content.get("descriptiveNonRepeating", {})
     freetext = content.get("freetext", {})
     indexed = content.get("indexedStructured", {})
+
     title = desc.get("title", {}).get("content", "Untitled")
     if isinstance(title, list):
         title = title[0] if title else "Untitled"
+
+    # Extract artist from freetext.name
     names = freetext.get("name", [])
     artist = None
     for n in names:
@@ -20,6 +27,8 @@ def _parse_result(row: dict):
             break
     if not artist and names:
         artist = names[0].get("content")
+
+    # Extract image
     media = desc.get("online_media", {}).get("media", [])
     image_url = None
     for m in media:
@@ -28,8 +37,10 @@ def _parse_result(row: dict):
             break
         if m.get("thumbnail"):
             image_url = m.get("thumbnail")
+
     if not image_url:
         return None
+
     year = None
     dates = indexed.get("date", [])
     if dates:
@@ -37,18 +48,27 @@ def _parse_result(row: dict):
             year = int(str(dates[0])[:4])
         except (ValueError, TypeError):
             pass
+
     return {
-        "title": title, "artist": artist, "year": year,
-        "image_url": image_url, "image_url_hd": image_url,
-        "source": "smithsonian", "source_id": row.get("id", ""),
-        "museum": "Smithsonian", "museum_city": "Washington D.C.", "museum_country": "USA",
+        "title": title,
+        "artist": artist,
+        "year": year,
+        "image_url": image_url,
+        "image_url_hd": image_url,
+        "source": "smithsonian",
+        "source_id": row.get("id", ""),
+        "museum": "Smithsonian",
+        "museum_city": "Washington D.C.",
+        "museum_country": "USA",
         "era": _derive_era(year),
     }
 
 
-async def search_smithsonian(query: str, limit: int = 20) -> list:
+async def search_smithsonian(query: str, limit: int = 20) -> list[dict]:
+    """Search Smithsonian. Returns empty list if no API key."""
     if not settings.SMITHSONIAN_API_KEY:
         return []
+
     params = {
         "api_key": settings.SMITHSONIAN_API_KEY,
         "q": f"{query} AND online_media_type:Images",
@@ -58,5 +78,7 @@ async def search_smithsonian(query: str, limit: int = 20) -> list:
         resp = await client.get(settings.SMITHSONIAN_API_URL, params=params)
         resp.raise_for_status()
         data = resp.json()
+
     rows = data.get("response", {}).get("rows", [])
-    return [r for r in [_parse_result(row) for row in rows] if r is not None]
+    results = [_parse_result(r) for r in rows]
+    return [r for r in results if r is not None]

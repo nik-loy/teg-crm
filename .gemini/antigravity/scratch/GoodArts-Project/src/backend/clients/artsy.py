@@ -73,3 +73,37 @@ async def fetch_exhibitions(city: str = None, status: str = "current") -> list[d
         return results
     except Exception:
         return []
+
+
+async def fetch_show_artworks(show_id: str) -> list[dict]:
+    """Fetch artworks for a specific exhibition/show from Artsy."""
+    token = await _get_token()
+    if not token:
+        return []
+
+    headers = {"X-Xapp-Token": token}
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            resp = await client.get(
+                f"{settings.ARTSY_API_URL}/artworks",
+                headers=headers,
+                params={"show_id": show_id, "size": 10},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        artworks = data.get("_embedded", {}).get("artworks", [])
+        results = []
+        for art in artworks:
+            results.append({
+                "title": art.get("title", "Untitled"),
+                "artist": art.get("collecting_institution") or art.get("cultural_maker"), # Fallbacks
+                "year": art.get("date"),
+                "image_url": (art.get("_links", {}).get("thumbnail", {}) or {}).get("href"),
+                "wikidata_id": None, # Artsy doesn't provide this directly
+                "source": "artsy",
+                "source_id": art.get("id"),
+            })
+        return results
+    except Exception:
+        return []

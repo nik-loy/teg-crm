@@ -1,11 +1,16 @@
-"""GoodArts — Wikipedia REST + MediaWiki API Client. No API key required."""
+"""
+GoodArts — Wikipedia REST + MediaWiki API Client
+Fetches page summaries and section content for artwork enrichment.
+No API key required.
+"""
 import httpx
 from src.backend.config import settings
 
 HEADERS = {"User-Agent": "GoodArts/0.1 (personal art tracker)"}
 
 
-async def get_page_summary(title: str):
+async def get_page_summary(title: str) -> dict | None:
+    """Fetch Wikipedia page summary via REST API. Returns {extract, thumbnail, description}."""
     url = f"{settings.WIKIPEDIA_API_URL}/page/summary/{title.replace(' ', '_')}"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -23,10 +28,13 @@ async def get_page_summary(title: str):
         return None
 
 
-async def get_page_sections(title: str) -> list:
+async def get_page_sections(title: str) -> list[dict]:
+    """Fetch section list via MediaWiki API. Returns [{index, heading, level}]."""
     params = {
-        "action": "parse", "page": title.replace(" ", "_"),
-        "prop": "sections", "format": "json",
+        "action": "parse",
+        "page": title.replace(" ", "_"),
+        "prop": "sections",
+        "format": "json",
     }
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -34,15 +42,20 @@ async def get_page_sections(title: str) -> list:
             resp.raise_for_status()
             data = resp.json()
         sections = data.get("parse", {}).get("sections", [])
-        return [{"index": s["index"], "heading": s["line"], "level": int(s["level"])} for s in sections]
+        return [{"index": s["index"], "heading": s["line"], "level": int(s["level"])}
+                for s in sections]
     except Exception:
         return []
 
 
 async def get_section_text(title: str, section_index: int) -> str:
+    """Fetch plain-text content of a specific section."""
     params = {
-        "action": "parse", "page": title.replace(" ", "_"),
-        "section": section_index, "prop": "wikitext", "format": "json",
+        "action": "parse",
+        "page": title.replace(" ", "_"),
+        "section": section_index,
+        "prop": "wikitext",
+        "format": "json",
     }
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -50,6 +63,7 @@ async def get_section_text(title: str, section_index: int) -> str:
             resp.raise_for_status()
             data = resp.json()
         wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
+        # Strip basic wiki markup for readability
         import re
         text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]", r"\1", wikitext)
         text = re.sub(r"\{\{[^}]*\}\}", "", text)

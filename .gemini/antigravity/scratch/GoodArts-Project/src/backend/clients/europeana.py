@@ -40,7 +40,7 @@ def _parse_europeana_item(item: dict) -> dict:
     }
 
 
-async def search_europeana(query: str, limit: int = 20) -> list[dict]:
+async def search_europeana(query: str, limit: int = 40) -> list[dict]:
     """Search Europeana for artworks. Returns empty list if no API key is configured."""
     if not settings.EUROPEANA_API_KEY:
         return []

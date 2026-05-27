@@ -109,6 +109,16 @@ def build_contacts_schema(parent_page_id: str, companies_db_id: str) -> dict:
             "Follow-Up Owner": {"people": {}},
             "Follow-Up Complete": {"checkbox": {}},
             "Notes": {"rich_text": {}},
+            "LinkedIn Outreach Status": {
+                "select": {
+                    "options": [
+                        {"name": "Request Sent", "color": "yellow"},
+                        {"name": "Connected", "color": "blue"},
+                        {"name": "Messaged", "color": "green"},
+                    ]
+                }
+            },
+            "Outreach Owner": {"rich_text": {}},
         },
     }
 

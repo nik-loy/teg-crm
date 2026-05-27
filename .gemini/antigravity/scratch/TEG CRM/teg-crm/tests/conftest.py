@@ -23,6 +23,9 @@ def mock_config() -> Config:
         ],
         followup_overdue_days=14,
         followup_warning_days=7,
+        anthropic_api_key="",
+        outreach_blacklist=["Netlight", "Oliver Wyman", "Accenture"],
+        outreach_luma_url="luma.com/71152vc3?coupon=INVITE26",
     )
 
 

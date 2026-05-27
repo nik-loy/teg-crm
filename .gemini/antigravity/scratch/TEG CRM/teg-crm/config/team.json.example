@@ -2,16 +2,19 @@
   {
     "notion_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "name": "Alice Müller",
-    "email": "alice@teg.de"
+    "email": "alice@teg.de",
+    "utm_source": "alce"
   },
   {
     "notion_id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
     "name": "Ben Schmidt",
-    "email": "ben@teg.de"
+    "email": "ben@teg.de",
+    "utm_source": "bnsc"
   },
   {
     "notion_id": "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
     "name": "Clara Weber",
-    "email": "clara@teg.de"
+    "email": "clara@teg.de",
+    "utm_source": "clwb"
   }
 ]

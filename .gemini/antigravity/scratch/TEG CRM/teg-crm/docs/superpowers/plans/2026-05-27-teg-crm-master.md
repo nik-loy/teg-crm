@@ -38,6 +38,14 @@ Phase 5: Weekly Report  ◄── Depends on Phase 1.
 
 Phase 6: LinkedIn Logger  ◄── Depends on Phase 1.
 └── src/linkedin/contact_logger.py
+
+Phase 7: LinkedIn Outreach Automation  ◄── Depends on Phase 6. BUILD NEXT.
+├── src/config.py                      (modified — add anthropic_api_key, utm_source per member)
+├── src/linkedin/contact_logger.py     (modified — add --status, --owner, --accept)
+├── src/linkedin/apollo_importer.py    (new — Apollo CSV → Notion batch import)
+├── src/linkedin/message_gen.py        (new — Claude API message generator)
+├── src/linkedin/outreach_queue.py     (new — queue viewer)
+└── scripts/migrate_outreach_fields.py (new — adds LinkedIn Outreach Status to live DB)
 ```
 
 ## Complete File Inventory
@@ -57,32 +65,38 @@ Phase 6: LinkedIn Logger  ◄── Depends on Phase 1.
 | `tests/test_discover_users.py` | 1 | ✅ Done |
 | `src/dashboard/generate_dashboard.py` | 2 | ✅ Done |
 | `tests/test_dashboard.py` | 2 | ✅ Done (17 tests passing) |
-| `src/dashboard/template.html` | 2 | **⬅ NEXT** |
-| `src/importer/csv_importer.py` | 3 | Create |
-| `tests/test_importer.py` | 3 | Create |
-| `src/reminders/follow_up_bot.py` | 4 | Create |
-| `.github/workflows/daily_reminders.yml` | 4 | Create |
-| `tests/test_reminders.py` | 4 | Create |
-| `src/reports/weekly_report.py` | 5 | Create |
-| `.github/workflows/weekly_report.yml` | 5 | Create |
-| `src/linkedin/contact_logger.py` | 6 | Create |
+| `src/dashboard/template.html` | 2 | ✅ Done (cdnjs SRI hash applied) |
+| `src/importer/csv_importer.py` | 3 | ✅ Done |
+| `tests/test_importer.py` | 3 | ✅ Done (18 tests passing) |
+| `src/reminders/follow_up_bot.py` | 4 | ✅ Done |
+| `.github/workflows/daily_reminders.yml` | 4 | ✅ Done |
+| `tests/test_reminders.py` | 4 | ✅ Done (15 tests passing) |
+| `src/reports/weekly_report.py` | 5 | ✅ Done |
+| `.github/workflows/weekly_report.yml` | 5 | ✅ Done |
+| `src/linkedin/contact_logger.py` | 6 | ✅ Done |
+| `src/config.py` (Phase 7 extension) | 7 | ✅ Done |
+| `scripts/migrate_outreach_fields.py` | 7 | ✅ Done |
+| `src/linkedin/apollo_importer.py` | 7 | ✅ Done |
+| `src/linkedin/message_gen.py` | 7 | ✅ Done |
+| `src/linkedin/outreach_queue.py` | 7 | ✅ Done |
+| `tests/test_apollo_importer.py` | 7 | ✅ Done |
+| `tests/test_message_gen.py` | 7 | ✅ Done |
+| `tests/test_outreach_queue.py` | 7 | ✅ Done |
+| `tests/test_contact_logger_v2.py` | 7 | ✅ Done |
 
 ## Current Status (as of 2026-05-27)
 
-**Phase 1: Foundation — COMPLETE** ✅ All 6 tasks done, all tests passing.
+**Phases 1–7: ALL COMPLETE** ✅ 124 tests passing. `pytest tests/ -v` is green.
 
-**Phase 2: Dashboard — IN PROGRESS**
-- Task 1 (aggregation logic): ✅ Done — `generate_dashboard.py` + 17 tests passing
-- **Task 2 (HTML template): NEXT** — Create `src/dashboard/template.html`, run full suite, smoke test
-
-**Start here in a new session:**
-Open `docs/superpowers/plans/2026-05-27-phase-2-dashboard.md` and execute **Task 2** from Step 3 onward (Steps 1–2 already done — render tests are in `tests/test_dashboard.py` and passing).
+**Phase 7: LinkedIn Outreach Automation — COMPLETE** ✅
+- Apollo CSV importer, message generator, outreach queue, contact_logger extensions all done
+- One manual step remaining: run `python -m scripts.migrate_outreach_fields` once against live Notion workspace
 
 ## Sub-Plans
 
 - [Phase 1: Foundation](2026-05-27-phase-1-foundation.md)
 - [Phase 2: Pipeline Dashboard](2026-05-27-phase-2-dashboard.md)
-- Phases 3–6: Plan after Phase 2 ships (CSV format must be confirmed for Phase 3)
+- [Phase 7: LinkedIn Outreach Automation](2026-05-27-phase-7-linkedin-outreach.md) ← NEXT
 
 ## Definition of Done (per phase)
 

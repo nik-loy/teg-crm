@@ -178,38 +178,13 @@ def _log_interaction(
     ))
 
 
-def _run_api_mode(
+def _call_and_display(
     client: Client,
     cfg: Config,
     contact_page_id: str,
-    name: str,
-    owner: str,
+    full_response: str,
 ) -> None:
-    """Calls Claude API, shows output, prompts for confirmation, logs to Notion."""
-    try:
-        import anthropic
-    except ImportError:
-        console.print("[red]Error:[/red] anthropic package not installed. Run: pip install anthropic")
-        return
-
-    profile_data = _prompt_profile_data()
-    if not profile_data.strip():
-        console.print("[yellow]No profile data entered. Exiting.[/yellow]")
-        return
-
-    invite_url = build_invite_url(cfg, owner)
-    user_message = f"Name: {name}\n\nProfil-Infos:\n{profile_data}\n\nEinladungslink für diese Nachricht: {invite_url}"
-
-    console.print("\n[dim]Generating message...[/dim]")
-    ai_client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
-    response = ai_client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=800,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    full_response = response.content[0].text
-
+    """Shared post-call logic: display response, check fit, confirm, log to Notion."""
     console.print("\n" + "─" * 60)
     console.print(full_response)
     console.print("─" * 60 + "\n")
@@ -230,12 +205,84 @@ def _run_api_mode(
         console.print("[green]✓[/green] Logged to Notion — contact marked Messaged.")
 
 
-def _run_print_mode(name: str, owner: str, cfg: Config) -> None:
-    """No API key — prints formatted block ready to paste into ChatGPT."""
+def _run_openai_mode(
+    client: Client,
+    cfg: Config,
+    contact_page_id: str,
+    name: str,
+    owner: str,
+) -> None:
+    """Calls OpenAI GPT-4o-mini, shows output, prompts for confirmation, logs to Notion."""
+    try:
+        import openai
+    except ImportError:
+        console.print("[red]Error:[/red] openai package not installed. Run: pip install openai")
+        return
+
+    profile_data = _prompt_profile_data()
+    if not profile_data.strip():
+        console.print("[yellow]No profile data entered. Exiting.[/yellow]")
+        return
+
     invite_url = build_invite_url(cfg, owner)
-    console.print("\n[bold yellow]No ANTHROPIC_API_KEY set — clipboard mode[/bold yellow]")
-    console.print("\n[dim]Step 1: Copy the system prompt at the top of message_gen.py into a new ChatGPT chat.[/dim]")
-    console.print("\n[dim]Step 2: Then send this message:[/dim]\n")
+    user_message = f"Name: {name}\n\nProfil-Infos:\n{profile_data}\n\nEinladungslink für diese Nachricht: {invite_url}"
+
+    console.print("\n[dim]Generating message via GPT-4o-mini...[/dim]")
+    ai_client = openai.OpenAI(api_key=cfg.openai_api_key)
+    response = ai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        max_tokens=800,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
+    )
+    full_response = response.choices[0].message.content or ""
+    _call_and_display(client, cfg, contact_page_id, full_response)
+
+
+def _run_api_mode(
+    client: Client,
+    cfg: Config,
+    contact_page_id: str,
+    name: str,
+    owner: str,
+) -> None:
+    """Calls Claude Haiku API, shows output, prompts for confirmation, logs to Notion."""
+    try:
+        import anthropic
+    except ImportError:
+        console.print("[red]Error:[/red] anthropic package not installed. Run: pip install anthropic")
+        return
+
+    profile_data = _prompt_profile_data()
+    if not profile_data.strip():
+        console.print("[yellow]No profile data entered. Exiting.[/yellow]")
+        return
+
+    invite_url = build_invite_url(cfg, owner)
+    user_message = f"Name: {name}\n\nProfil-Infos:\n{profile_data}\n\nEinladungslink für diese Nachricht: {invite_url}"
+
+    console.print("\n[dim]Generating message via Claude Haiku...[/dim]")
+    ai_client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+    response = ai_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=800,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    full_response = response.content[0].text
+    _call_and_display(client, cfg, contact_page_id, full_response)
+
+
+def _run_print_mode(name: str, owner: str, cfg: Config) -> None:
+    """No API key set — prints a clipboard-ready block for manual ChatGPT/Claude use."""
+    invite_url = build_invite_url(cfg, owner)
+    console.print("\n[bold yellow]No API key set — clipboard mode[/bold yellow]")
+    console.print("[dim]Set OPENAI_API_KEY (recommended) or ANTHROPIC_API_KEY in .env to enable auto-generation.[/dim]")
+    console.print("\n[dim]Step 1: Open ChatGPT or Claude. Start a new chat.[/dim]")
+    console.print("[dim]Step 2: Paste the SYSTEM_PROMPT constant from src/linkedin/message_gen.py as the system prompt.[/dim]")
+    console.print("\n[dim]Step 3: Send this as your first message:[/dim]\n")
     console.print("─" * 60)
     console.print(f"{name}")
     console.print(f"\n[Paste headline, role, bio, experience here]\n\nEinladungslink: {invite_url}")
@@ -270,7 +317,9 @@ def main() -> None:
         if not Confirm.ask("Continue?"):
             return
 
-    if cfg.anthropic_api_key:
+    if cfg.openai_api_key:
+        _run_openai_mode(client, cfg, contact_page_id, name, owner)
+    elif cfg.anthropic_api_key:
         _run_api_mode(client, cfg, contact_page_id, name, owner)
     else:
         _run_print_mode(name, owner, cfg)

@@ -6,25 +6,19 @@ const PAYLOAD = "teg-crm-authed";
 async function verifySessionEdge(token: string | undefined, secret: string): Promise<boolean> {
   if (!token) return false;
   const enc = new TextEncoder();
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const sigBytes = Uint8Array.from(
+    parts[1].match(/.{2}/g)?.map((b) => parseInt(b, 16)) ?? []
+  );
   const key = await crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["verify"]
   );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(PAYLOAD));
-  const sigHex = Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  const expected = `${PAYLOAD}.${sigHex}`;
-  // Constant-time comparison
-  if (token.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++) {
-    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
+  return crypto.subtle.verify("HMAC", key, sigBytes, enc.encode(PAYLOAD));
 }
 
 export async function middleware(req: NextRequest) {

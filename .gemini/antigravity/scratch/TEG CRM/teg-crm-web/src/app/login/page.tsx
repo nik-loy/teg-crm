@@ -25,7 +25,7 @@ function LoginForm() {
       });
       if (res.ok) {
         const raw = searchParams.get("next") ?? "/today";
-        const next = raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : "/today";
+        const next = raw.startsWith("/") && !/^\/[/\\]/.test(raw) ? raw : "/today";
         router.push(next);
       } else {
         setError("Wrong password");

@@ -174,7 +174,7 @@ function AddContactForm() {
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ profileText: text }),
       });
       if (res.status === 501) {
         // OpenAI key not configured — silently skip
@@ -183,7 +183,7 @@ function AddContactForm() {
       if (!res.ok) return;
       const data = await res.json();
       if (data.name && !name) setName(data.name);
-      if (data.jobTitle && !jobTitle) setJobTitle(data.jobTitle);
+      if (data.current_title && !jobTitle) setJobTitle(data.current_title);
     } catch {
       // network or parse error — gracefully ignore
     } finally {

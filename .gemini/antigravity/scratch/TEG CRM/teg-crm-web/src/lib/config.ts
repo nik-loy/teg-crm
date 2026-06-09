@@ -70,6 +70,7 @@ export function getTeam(): TeamMember[] {
 export function utmFor(name: string): string {
   const needle = name.toLowerCase();
   const member = getTeam().find((m) => m.name.toLowerCase() === needle);
+  if (!member) console.warn(`utmFor: no team member named "${name}" — falling back to "utm"`);
   return member?.utm_source ?? "utm";
 }
 

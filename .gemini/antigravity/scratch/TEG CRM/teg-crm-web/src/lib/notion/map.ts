@@ -11,8 +11,7 @@ function getText(props: Props, key: string): string {
   if (p.type === "url") return p.url ?? "";
   if (p.type === "select") return p.select?.name ?? "";
   if (p.type === "date") return p.date?.start ?? "";
-  if (p.type === "checkbox") return String(p.checkbox);
-  if (p.type === "people") return (p.people[0] as { name?: string })?.name ?? "";
+  if (p.type === "people") return p.people[0]?.name ?? "";
   return "";
 }
 

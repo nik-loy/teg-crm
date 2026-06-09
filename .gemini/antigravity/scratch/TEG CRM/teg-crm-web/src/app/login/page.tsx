@@ -24,7 +24,8 @@ function LoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        const next = searchParams.get("next") ?? "/today";
+        const raw = searchParams.get("next") ?? "/today";
+        const next = raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : "/today";
         router.push(next);
       } else {
         setError("Wrong password");

@@ -11,7 +11,10 @@ function getText(props: Props, key: string): string {
   if (p.type === "url") return p.url ?? "";
   if (p.type === "select") return p.select?.name ?? "";
   if (p.type === "date") return p.date?.start ?? "";
-  if (p.type === "people") return p.people[0]?.name ?? "";
+  if (p.type === "people") {
+    const person = p.people[0] as { name?: string } | undefined;
+    return person?.name ?? "";
+  }
   return "";
 }
 

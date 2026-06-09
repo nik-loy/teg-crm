@@ -3,6 +3,7 @@ import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoint
 import { notion, withRetry } from "./client";
 import { pageToContact } from "./map";
 import type { Contact } from "../types";
+import { title as propTitle, richText, select as propSelect, url as propUrl } from "./props";
 
 const STALE_REQUEST_DAYS = parseInt(process.env.STALE_REQUEST_DAYS ?? "5", 10);
 
@@ -87,4 +88,63 @@ export async function getTodayBuckets(dbId: string, owner?: string): Promise<Tod
     dueFollowups: byOwner(dueFollowups),
     replies: byOwner(replies),
   };
+}
+
+/**
+ * Finds a contact by exact LinkedIn URL match.
+ * Returns the Notion page id, or undefined if not found.
+ */
+export async function findByUrl(linkedinUrl: string, dbId: string): Promise<string | undefined> {
+  const results = await queryAll(dbId, {
+    property: "LinkedIn URL",
+    url: { equals: linkedinUrl },
+  });
+  return results[0]?.id;
+}
+
+/**
+ * Finds a contact by case-insensitive name match.
+ * Returns the Notion page id, or undefined if not found.
+ * Weak key — use only when LinkedIn URL is not available.
+ */
+export async function findByName(name: string, dbId: string): Promise<string | undefined> {
+  const needle = name.toLowerCase();
+  const results = await queryAll(dbId, {
+    property: "Name",
+    title: { contains: name },
+  });
+  const match = results.find((c) => c.name.toLowerCase() === needle);
+  return match?.id;
+}
+
+type NotionPatch = Record<string, unknown>;
+
+/**
+ * Computes a non-destructive property patch.
+ * Only fills fields that are empty in the existing contact.
+ * Never overwrites non-empty existing values.
+ */
+export function resolveMerge(
+  incoming: Partial<{
+    name: string;
+    linkedinUrl: string;
+    jobTitle: string;
+    company: string;
+    tier: string;
+    pipelineStage: string;
+    outreachStatus: string;
+    notes: string;
+  }>,
+  existing: Contact
+): NotionPatch {
+  const patch: NotionPatch = {};
+
+  if (incoming.name && !existing.name) patch["Name"] = propTitle(incoming.name);
+  if (incoming.linkedinUrl && !existing.linkedinUrl) patch["LinkedIn URL"] = propUrl(incoming.linkedinUrl);
+  if (incoming.jobTitle && !existing.jobTitle) patch["Job Title"] = richText(incoming.jobTitle);
+  if (incoming.tier && !existing.tier) patch["Tier"] = propSelect(incoming.tier);
+  if (incoming.pipelineStage && !existing.pipelineStage) patch["Pipeline Stage"] = propSelect(incoming.pipelineStage);
+  if (incoming.notes && !existing.notes) patch["Notes"] = richText(incoming.notes);
+
+  return patch;
 }

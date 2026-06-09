@@ -12,6 +12,7 @@ import {
   CheckCheck,
   AlertTriangle,
   RefreshCw,
+  MessageCircleReply,
 } from "lucide-react";
 import type { ParsedMessage } from "@/lib/message/parse";
 
@@ -241,6 +242,149 @@ function Preflight({
 }
 
 /* ------------------------------------------------------------------ */
+/* Follow-up panel                                                     */
+/* ------------------------------------------------------------------ */
+function FollowupPanel({
+  contactId,
+  anrede,
+}: {
+  contactId: string;
+  anrede: "Du" | "Sie";
+}) {
+  const [reply, setReply] = useState("");
+  const [selectedAnrede, setSelectedAnrede] = useState<"Du" | "Sie">(anrede);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ text: string; positive: boolean } | null>(null);
+  const [logStatus, setLogStatus] = useState<LogStatus>("idle");
+  const [promoted, setPromoted] = useState(false);
+
+  async function generate() {
+    if (!reply.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setLogStatus("idle");
+    setPromoted(false);
+    try {
+      const res = await fetch("/api/followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId, reply: reply.trim(), anrede: selectedAnrede }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setResult(data);
+    } catch {
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logFollowup() {
+    if (!result?.text) return;
+    setLogStatus("logging");
+    try {
+      const res = await fetch("/api/interactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId,
+          summary: `Follow-up response sent (reply: '${reply.slice(0, 60)}')`,
+          type: "LinkedIn Message",
+          nextAction: "Await further response",
+        }),
+      });
+      if (!res.ok) throw new Error("log failed");
+      setLogStatus("logged");
+    } catch {
+      setLogStatus("error");
+    }
+  }
+
+  async function promoteToEngaged() {
+    await fetch(`/api/contacts/${contactId}/stage`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: "Engaged" }),
+    });
+    setPromoted(true);
+  }
+
+  return (
+    <Card className="border-dashed">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <MessageCircleReply className="size-4" />
+          Follow-up reply
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Contact replied? Enter their message to draft a short, warm response.
+        </p>
+        <textarea
+          rows={2}
+          placeholder='e.g. "Klingt spannend!"'
+          value={reply}
+          onChange={(e) => setReply(e.target.value)}
+          className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
+        />
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedAnrede}
+            onChange={(e) => setSelectedAnrede(e.target.value as "Du" | "Sie")}
+            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring appearance-none cursor-pointer"
+          >
+            <option value="Du">Du</option>
+            <option value="Sie">Sie</option>
+          </select>
+          <Button
+            size="sm"
+            onClick={generate}
+            disabled={loading || !reply.trim()}
+          >
+            {loading ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+            Draft reply
+          </Button>
+        </div>
+
+        {result && (
+          <div className="space-y-2 pt-1 border-t border-border">
+            <textarea
+              rows={3}
+              defaultValue={result.text}
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
+              readOnly
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <CopyButton text={result.text} />
+              {logStatus === "logged" ? (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <CheckCheck className="size-3.5" /> Logged
+                </span>
+              ) : (
+                <Button size="sm" variant="outline" onClick={logFollowup} disabled={logStatus === "logging"}>
+                  {logStatus === "logging" && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                  Log follow-up
+                </Button>
+              )}
+              {result.positive && logStatus === "logged" && !promoted && (
+                <Button size="sm" variant="secondary" onClick={promoteToEngaged}>
+                  Mark as Engaged
+                </Button>
+              )}
+              {promoted && (
+                <span className="text-xs text-green-600">Pipeline → Engaged</span>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Inner component — uses hooks requiring Suspense                      */
 /* ------------------------------------------------------------------ */
 function MessageInner({ contactId }: { contactId: string }) {
@@ -406,6 +550,8 @@ function MessageInner({ contactId }: { contactId: string }) {
               Interaction logged. Contact marked as Messaged.
             </p>
           )}
+
+          <FollowupPanel contactId={contactId} anrede={parsed.anrede} />
         </>
       )}
     </div>

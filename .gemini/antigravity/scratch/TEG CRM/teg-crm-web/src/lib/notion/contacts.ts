@@ -129,7 +129,6 @@ export function resolveMerge(
     name: string;
     linkedinUrl: string;
     jobTitle: string;
-    company: string;
     tier: string;
     pipelineStage: string;
     outreachStatus: string;
@@ -144,6 +143,7 @@ export function resolveMerge(
   if (incoming.jobTitle && !existing.jobTitle) patch["Job Title"] = richText(incoming.jobTitle);
   if (incoming.tier && !existing.tier) patch["Tier"] = propSelect(incoming.tier);
   if (incoming.pipelineStage && !existing.pipelineStage) patch["Pipeline Stage"] = propSelect(incoming.pipelineStage);
+  if (incoming.outreachStatus && !existing.outreachStatus) patch["LinkedIn Outreach Status"] = propSelect(incoming.outreachStatus);
   if (incoming.notes && !existing.notes) patch["Notes"] = richText(incoming.notes);
 
   return patch;

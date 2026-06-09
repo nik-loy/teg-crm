@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, UserPlus, MessageSquare, Camera, Users, BarChart2 } from "lucide-react";
+import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
@@ -11,7 +11,8 @@ const NAV = [
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/screenshots", label: "Screenshots", icon: Camera },
   { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/pipeline", label: "Pipeline", icon: BarChart2 },
+  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

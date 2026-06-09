@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { OWNER_STORAGE_KEY } from "@/components/OwnerFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,6 +256,7 @@ function FollowupPanel({
   const [selectedAnrede, setSelectedAnrede] = useState<"Du" | "Sie">(anrede);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ text: string; positive: boolean } | null>(null);
+  const [editedText, setEditedText] = useState("");
   const [logStatus, setLogStatus] = useState<LogStatus>("idle");
   const [promoted, setPromoted] = useState(false);
 
@@ -273,6 +275,7 @@ function FollowupPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setResult(data);
+      setEditedText((data as { text: string }).text);
     } catch {
       setResult(null);
     } finally {
@@ -281,7 +284,7 @@ function FollowupPanel({
   }
 
   async function logFollowup() {
-    if (!result?.text) return;
+    if (!editedText.trim()) return;
     setLogStatus("logging");
     try {
       const res = await fetch("/api/interactions", {
@@ -352,12 +355,12 @@ function FollowupPanel({
           <div className="space-y-2 pt-1 border-t border-border">
             <textarea
               rows={3}
-              defaultValue={result.text}
+              value={editedText}
+              onChange={(e) => setEditedText(e.target.value)}
               className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
-              readOnly
             />
             <div className="flex items-center gap-2 flex-wrap">
-              <CopyButton text={result.text} />
+              <CopyButton text={editedText} />
               {logStatus === "logged" ? (
                 <span className="text-xs text-green-600 flex items-center gap-1">
                   <CheckCheck className="size-3.5" /> Logged
@@ -389,7 +392,11 @@ function FollowupPanel({
 /* ------------------------------------------------------------------ */
 function MessageInner({ contactId }: { contactId: string }) {
   const searchParams = useSearchParams();
-  const [owner, setOwner] = useState(searchParams.get("owner") ?? "");
+  const [owner, setOwner] = useState(() => {
+    // seed from URL param; localStorage read happens in effect below
+    return searchParams.get("owner") ?? "";
+  });
+  const ownerInitialised = useRef(false);
   const [profileText, setProfileText] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -421,6 +428,20 @@ function MessageInner({ contactId }: { contactId: string }) {
       setLoading(false);
     }
   }
+
+  // Restore owner from localStorage if not set via URL param
+  useEffect(() => {
+    if (ownerInitialised.current) return;
+    ownerInitialised.current = true;
+    if (!owner) {
+      try {
+        const saved = localStorage.getItem(OWNER_STORAGE_KEY);
+        if (saved) setOwner(saved);
+      } catch {
+        // ignore
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-generate on mount
   useEffect(() => {

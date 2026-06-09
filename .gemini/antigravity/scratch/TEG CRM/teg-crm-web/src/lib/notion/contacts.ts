@@ -55,7 +55,7 @@ export async function getTodayBuckets(dbId: string, owner?: string): Promise<Tod
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - STALE_REQUEST_DAYS);
   const staleRequests = requestSent.filter((c) => {
-    if (!c.lastContactDate) return false;
+    if (!c.lastContactDate) return true; // no date = never followed up = always stale
     return new Date(c.lastContactDate) < cutoff;
   });
 

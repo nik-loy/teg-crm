@@ -19,8 +19,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    const res = await fetch("/api/auth/logout", { method: "POST" });
+    if (res.ok) router.push("/login");
   }
 
   return (
@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 space-y-1 p-2">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname.startsWith(href);
+            const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
                 key={href}

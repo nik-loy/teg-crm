@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { findByUrl, findByName, queryAll } from "@/lib/notion/contacts";
+import { normalizeLinkedInUrl } from "@/app/api/contacts/route";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,11 +11,13 @@ export async function GET(req: Request) {
 
   try {
     if (urlParam) {
-      const pageId = await findByUrl(urlParam, dbId);
+      const normalized = normalizeLinkedInUrl(urlParam);
+      if (!normalized) return NextResponse.json({ found: false });
+      const pageId = await findByUrl(normalized, dbId);
       if (!pageId) return NextResponse.json({ found: false });
       const contacts = await queryAll(dbId, {
         property: "LinkedIn URL",
-        url: { equals: urlParam },
+        url: { equals: normalized },
       });
       return NextResponse.json({ found: true, contact: contacts[0] ?? null });
     }

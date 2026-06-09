@@ -6,12 +6,13 @@ import { title, richText, select, url as propUrl, date } from "@/lib/notion/prop
 import { pageToContact } from "@/lib/notion/map";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
-function normalizeLinkedInUrl(raw: string): string {
+export function normalizeLinkedInUrl(raw: string): string {
   try {
     const u = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    if (!u.hostname.endsWith("linkedin.com")) return "";
     return `https://linkedin.com${u.pathname.replace(/\/$/, "")}`;
   } catch {
-    return raw.trim();
+    return "";
   }
 }
 

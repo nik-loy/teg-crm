@@ -24,7 +24,7 @@ const STATUS_MAP: Record<string, string> = {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name, jobTitle, tier, status, owner } = body;
+  const { name, jobTitle, tier, status, owner, notes } = body;
   const rawUrl: string | undefined = body.url;
 
   if (!name?.trim()) {
@@ -80,6 +80,7 @@ export async function POST(req: Request) {
   if (jobTitle) props["Job Title"] = richText(jobTitle);
   if (tier) props["Tier"] = select(tier);
   if (owner) props["Outreach Owner"] = richText(owner);
+  if (notes) props["Notes"] = richText(notes);
 
   const page = await withRetry(() =>
     notion().pages.create({

@@ -15,6 +15,15 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
 
+// 5 most-used routes for the mobile bottom bar
+const MOBILE_NAV = [
+  { href: "/today", label: "Today", icon: Home },
+  { href: "/add", label: "Add", icon: UserPlus },
+  { href: "/messages", label: "Message", icon: MessageSquare },
+  { href: "/screenshots", label: "Photos", icon: Camera },
+  { href: "/contacts", label: "Contacts", icon: Users },
+];
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -70,11 +79,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Button>
       </div>
 
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t bg-background z-10 flex safe-area-inset-bottom">
+        {MOBILE_NAV.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(href + "/");
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon className="h-5 w-5" />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         {/* Spacer for mobile top bar */}
         <div className="md:hidden h-14" />
         {children}
+        {/* Spacer for mobile bottom nav */}
+        <div className="md:hidden h-16" />
       </main>
     </div>
   );

@@ -1,10 +1,12 @@
 import { getTodayBuckets, type TodayBuckets } from "@/lib/notion/contacts";
 import { env } from "@/lib/env";
+import { getTeam } from "@/lib/config";
 import type { Contact } from "@/lib/types";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { OwnerFilter } from "@/components/OwnerFilter";
 
 interface PageProps {
   searchParams: Promise<{ owner?: string }>;
@@ -94,6 +96,7 @@ function BucketSection({
 
 export default async function TodayPage({ searchParams }: PageProps) {
   const { owner } = await searchParams;
+  const teamNames = getTeam().map((m) => m.name);
 
   let buckets: TodayBuckets | null = null;
   let errorMsg: string | null = null;
@@ -112,13 +115,9 @@ export default async function TodayPage({ searchParams }: PageProps) {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Today</h1>
-        {owner && (
-          <span className="text-sm text-muted-foreground">
-            Filtered: <strong>{owner}</strong>
-          </span>
-        )}
+        <OwnerFilter names={teamNames} current={owner ?? ""} />
       </div>
 
       {errorMsg && (

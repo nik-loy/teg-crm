@@ -58,10 +58,22 @@ export default function PipelinePage() {
   const dragging = useRef<Contact | null>(null);
 
   useEffect(() => {
-    fetch("/api/contacts/list?")
-      .then((r) => r.json())
-      .then((d: { contacts: Contact[] }) => setContacts(d.contacts))
-      .finally(() => setLoading(false));
+    async function fetchAll() {
+      const all: Contact[] = [];
+      let cursor: string | null = null;
+      do {
+        const url = cursor
+          ? `/api/contacts/list?cursor=${encodeURIComponent(cursor)}`
+          : "/api/contacts/list";
+        const res = await fetch(url);
+        const d = (await res.json()) as { contacts: Contact[]; nextCursor: string | null };
+        all.push(...d.contacts);
+        cursor = d.nextCursor;
+      } while (cursor);
+      setContacts(all);
+      setLoading(false);
+    }
+    fetchAll();
   }, []);
 
   function handleDragStart(contact: Contact) {

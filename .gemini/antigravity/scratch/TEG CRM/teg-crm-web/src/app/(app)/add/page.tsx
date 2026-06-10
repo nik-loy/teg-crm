@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { OwnerSelect } from "@/components/OwnerSelect";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -143,16 +144,37 @@ function AddContactForm() {
   const [linkedinUrl, setLinkedinUrl] = useState(urlParam);
   const [name, setName] = useState(nameParam);
   const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
   const [tier, setTier] = useState("");
   const [status, setStatus] = useState("request_sent");
   const [owner, setOwner] = useState("");
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
 
   const [profileText, setProfileText] = useState("");
-  const [profileOpen, setProfileOpen] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [events, setEvents] = useState<string[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
+
+  // Fetch available events on mount
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const res = await fetch("/api/events");
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data.events ?? []);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingEvents(false);
+      }
+    }
+    fetchEvents();
+  }, []);
 
   // sync if URL params change (e.g. navigating via bookmarklet)
   const initialised = useRef(false);
@@ -184,6 +206,7 @@ function AddContactForm() {
       const data = await res.json();
       if (data.name && !name) setName(data.name);
       if (data.current_title && !jobTitle) setJobTitle(data.current_title);
+      if (data.current_company && !company) setCompany(data.current_company);
     } catch {
       // network or parse error — gracefully ignore
     } finally {
@@ -206,10 +229,12 @@ function AddContactForm() {
           url: linkedinUrl.trim() || undefined,
           name: name.trim(),
           jobTitle: jobTitle.trim() || undefined,
+          company: company.trim() || undefined,
           tier: tier || undefined,
           status,
           owner: owner.trim() || undefined,
-          profileText: profileText.trim() || undefined,
+          profileSummary: profileText.trim() || undefined,
+          events: selectedEvents.length > 0 ? selectedEvents : undefined,
         }),
       });
 
@@ -239,6 +264,14 @@ function AddContactForm() {
     }
   }
 
+  function toggleEvent(eventName: string) {
+    setSelectedEvents((prev) =>
+      prev.includes(eventName)
+        ? prev.filter((e) => e !== eventName)
+        : [...prev, eventName]
+    );
+  }
+
   return (
     <div className="p-6 max-w-lg mx-auto space-y-4">
       <div className="flex items-center justify-between">
@@ -251,6 +284,25 @@ function AddContactForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Profile paste — now prominent and first */}
+            <div>
+              <Label htmlFor="profileText">LinkedIn Profile Text</Label>
+              <textarea
+                id="profileText"
+                rows={10}
+                placeholder="Paste the full LinkedIn page text here — name, title, company and more will be auto-filled"
+                value={profileText}
+                onChange={(e) => handleProfilePaste(e.target.value)}
+                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
+              />
+              {extracting && (
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
+                  <Loader2 className="size-3 animate-spin" />
+                  Extracting fields&hellip;
+                </p>
+              )}
+            </div>
+
             {/* LinkedIn URL */}
             <div>
               <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
@@ -284,9 +336,21 @@ function AddContactForm() {
               <Input
                 id="jobTitle"
                 type="text"
-                placeholder="e.g. Software Engineer at Acme"
+                placeholder="e.g. Software Engineer"
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
+              />
+            </div>
+
+            {/* Company */}
+            <div>
+              <Label htmlFor="company">Company</Label>
+              <Input
+                id="company"
+                type="text"
+                placeholder="Company name"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
               />
             </div>
 
@@ -310,51 +374,34 @@ function AddContactForm() {
               </div>
             </div>
 
-            {/* Owner */}
+            {/* Owner dropdown */}
             <div>
               <Label htmlFor="owner">Outreach Owner</Label>
-              <Input
-                id="owner"
-                type="text"
-                placeholder="Your name / team member"
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-              />
+              <OwnerSelect value={owner} onChange={setOwner} />
             </div>
 
-            {/* Collapsed profile paste section */}
-            <div className="rounded-lg border border-border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setProfileOpen((o) => !o)}
-                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
-              >
-                <span>Paste LinkedIn profile text (auto-fill)</span>
-                {profileOpen ? (
-                  <ChevronUp className="size-4" />
-                ) : (
-                  <ChevronDown className="size-4" />
-                )}
-              </button>
-              {profileOpen && (
-                <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border">
-                  <textarea
-                    id="profileText"
-                    rows={6}
-                    placeholder="Paste the LinkedIn profile text here. Name and job title will be auto-filled if /api/extract is configured."
-                    value={profileText}
-                    onChange={(e) => handleProfilePaste(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
-                  />
-                  {extracting && (
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Loader2 className="size-3 animate-spin" />
-                      Extracting fields&hellip;
-                    </p>
-                  )}
+            {/* Events checkboxes */}
+            {!loadingEvents && events.length > 0 && (
+              <div>
+                <Label htmlFor="events">Invite to event(s)</Label>
+                <div className="space-y-2 mt-2">
+                  {events.map((eventName) => (
+                    <label
+                      key={eventName}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedEvents.includes(eventName)}
+                        onChange={() => toggleEvent(eventName)}
+                        className="rounded border-input w-4 h-4"
+                      />
+                      <span className="text-sm text-foreground">{eventName}</span>
+                    </label>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Submit */}
             <Button

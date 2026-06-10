@@ -111,6 +111,19 @@ function ContactDetail({ contact, onClose, onUpdated }: ContactDetailProps) {
         </div>
       </div>
 
+      {contact.events && contact.events.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Events</p>
+          <div className="flex flex-wrap gap-1">
+            {contact.events.map((e) => (
+              <span key={e} className="inline-block rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-xs font-medium">
+                {e}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {contact.notes && (
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
@@ -215,6 +228,7 @@ function ContactsInner() {
   const stage = searchParams.get("stage") ?? "";
   const tier = searchParams.get("tier") ?? "";
   const owner = searchParams.get("owner") ?? "";
+  const event = searchParams.get("event") ?? "";
   const q = searchParams.get("q") ?? "";
 
   function setParam(key: string, value: string) {
@@ -231,6 +245,7 @@ function ContactsInner() {
     if (stage) params.set("stage", stage);
     if (tier) params.set("tier", tier);
     if (owner) params.set("owner", owner);
+    if (event) params.set("event", event);
     if (q) params.set("q", q);
     if (cursor) params.set("cursor", cursor);
 
@@ -245,7 +260,7 @@ function ContactsInner() {
     } finally {
       setLoading(false);
     }
-  }, [stage, tier, owner, q]);
+  }, [stage, tier, owner, event, q]);
 
   useEffect(() => {
     fetchContacts();
@@ -258,7 +273,27 @@ function ContactsInner() {
     setSelected(updated);
   }
 
-  const hasFilters = !!(stage || tier || owner || q);
+  const hasFilters = !!(stage || tier || owner || event || q);
+  const [events, setEvents] = useState<string[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+
+  // Fetch available events on mount
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const res = await fetch("/api/events");
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data.events ?? []);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingEvents(false);
+      }
+    }
+    fetchEvents();
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -313,6 +348,21 @@ function ContactsInner() {
           onBlur={(e) => setParam("owner", e.target.value)}
         />
 
+        {!loadingEvents && events.length > 0 && (
+          <select
+            className="border rounded px-2 py-1.5 text-sm bg-background"
+            value={event}
+            onChange={(e) => setParam("event", e.target.value)}
+          >
+            <option value="">All events</option>
+            {events.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+        )}
+
         {hasFilters && (
           <Button
             variant="ghost"
@@ -340,6 +390,7 @@ function ContactsInner() {
                 <th className="px-3 py-2 text-left font-medium hidden md:table-cell">Status</th>
                 <th className="px-3 py-2 text-left font-medium hidden lg:table-cell">Owner</th>
                 <th className="px-3 py-2 text-left font-medium hidden lg:table-cell">Last Contact</th>
+                <th className="px-3 py-2 text-left font-medium hidden xl:table-cell">Events</th>
               </tr>
             </thead>
             <tbody>
@@ -377,6 +428,19 @@ function ContactsInner() {
                   </td>
                   <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">
                     {c.lastContactDate || "—"}
+                  </td>
+                  <td className="px-3 py-2 hidden xl:table-cell">
+                    {c.events && c.events.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {c.events.map((e) => (
+                          <span key={e} className="inline-block rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-xs font-medium">
+                            {e}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

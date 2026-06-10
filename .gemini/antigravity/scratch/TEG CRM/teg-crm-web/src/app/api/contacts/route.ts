@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { findByUrl, findByName, resolveMerge, queryAll } from "@/lib/notion/contacts";
 import { notion, withRetry } from "@/lib/notion/client";
-import { title, richText, select, url as propUrl, date } from "@/lib/notion/props";
+import { title, richText, select, url as propUrl, date, multiSelect } from "@/lib/notion/props";
 import { pageToContact } from "@/lib/notion/map";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
@@ -24,7 +24,7 @@ const STATUS_MAP: Record<string, string> = {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name, jobTitle, tier, status, owner, notes } = body;
+  const { name, jobTitle, tier, status, owner, notes, profileSummary, company, events } = body;
   const rawUrl: string | undefined = body.url;
 
   if (!name?.trim()) {
@@ -81,6 +81,9 @@ export async function POST(req: Request) {
   if (tier) props["Tier"] = select(tier);
   if (owner) props["Outreach Owner"] = richText(owner);
   if (notes) props["Notes"] = richText(notes);
+  if (profileSummary) props["Profile Summary"] = richText(profileSummary);
+  if (company && !notes) props["Notes"] = richText(`Company: ${company}`);
+  if (events && events.length > 0) props["Events"] = multiSelect(events);
 
   const page = await withRetry(() =>
     notion().pages.create({

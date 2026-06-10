@@ -30,6 +30,12 @@ export function pageToContact(page: PageObjectResponse): Contact {
   const followUpComplete =
     followUpProp?.type === "checkbox" ? followUpProp.checkbox : false;
 
+  const eventsProp = p["Events"];
+  const events =
+    eventsProp?.type === "multi_select"
+      ? eventsProp.multi_select.map((o) => o.name)
+      : [];
+
   return {
     id: page.id,
     name: getText(p, "Name"),
@@ -46,6 +52,8 @@ export function pageToContact(page: PageObjectResponse): Contact {
     followUpOwner: getText(p, "Follow-Up Owner"),
     followUpComplete,
     notes: getText(p, "Notes"),
+    profileSummary: getText(p, "Profile Summary"),
     notionUrl: page.url,
+    events: events.length > 0 ? events : undefined,
   };
 }

@@ -7,13 +7,15 @@ import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoint
 type PropertyFilter =
   | { property: string; select: { equals: string } }
   | { property: string; rich_text: { contains: string } }
-  | { property: string; title: { contains: string } };
+  | { property: string; title: { contains: string } }
+  | { property: string; multi_select: { contains: string } };
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const stage = searchParams.get("stage") || "";
   const tier = searchParams.get("tier") || "";
   const owner = searchParams.get("owner") || "";
+  const event = searchParams.get("event") || "";
   const q = searchParams.get("q") || "";
   const cursor = searchParams.get("cursor") || undefined;
 
@@ -29,6 +31,9 @@ export async function GET(req: Request) {
   }
   if (owner) {
     filters.push({ property: "Outreach Owner", rich_text: { contains: owner } });
+  }
+  if (event) {
+    filters.push({ property: "Events", multi_select: { contains: event } });
   }
   if (q) {
     filters.push({ property: "Name", title: { contains: q } });

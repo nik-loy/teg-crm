@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { OWNER_STORAGE_KEY } from "@/components/OwnerFilter";
+import { OwnerSelect, OWNER_STORAGE_KEY } from "@/components/OwnerSelect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -454,12 +454,7 @@ function MessageInner({ contactId }: { contactId: string }) {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Generate Message</h1>
         <div className="flex items-center gap-2">
-          <Input
-            placeholder="Owner (your name)"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            className="h-8 w-36 text-sm"
-          />
+          <OwnerSelect value={owner} onChange={setOwner} className="h-8 w-36 text-sm" />
           <Button size="sm" variant="outline" onClick={generate} disabled={loading}>
             {loading ? (
               <Loader2 className="size-3.5 animate-spin mr-1.5" />

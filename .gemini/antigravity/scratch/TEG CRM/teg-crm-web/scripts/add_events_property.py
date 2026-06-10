@@ -37,6 +37,11 @@ def main():
         print("Error: NOTION_CONTACTS_DB_ID environment variable not set")
         sys.exit(1)
 
+    # Strip query parameters if user included them (e.g. ?v=...)
+    if "?" in contacts_db_id:
+        contacts_db_id = contacts_db_id.split("?")[0]
+        print(f"Note: Stripped query parameters from database ID")
+
     # Load events from registry
     registry_path = Path(__file__).parent.parent / "config" / "events-registry.json"
     if not registry_path.exists():

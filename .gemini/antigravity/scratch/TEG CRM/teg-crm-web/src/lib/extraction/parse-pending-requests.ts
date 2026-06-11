@@ -21,77 +21,64 @@ function parseDaysAgo(text: string): number {
   return 0;
 }
 
-// Matches "Name's profile picture" with any apostrophe variant
-function isProfilePictureLine(line: string): boolean {
-  return /[''’`]\s*s?\s*profile picture$/i.test(line);
-}
-
 function isSentLine(line: string): boolean {
   return /^Sent\s+(\d+\s+(day|week|month)s?\s+ago|just\s+now|today)/i.test(line);
 }
 
-function isSkipLine(line: string): boolean {
-  return /^(Withdraw|Cancel|Message|Connect|Follow|Remove)$/i.test(line);
+// Lines that mark a block boundary but are never a name/headline
+function isBoundaryLine(line: string): boolean {
+  // "Withdraw", "Cancel" buttons; image alt text like "John's profile picture"
+  return (
+    /^(Withdraw|Cancel|Message|Connect|Follow|Remove|Pending)$/i.test(line) ||
+    /profile picture$/i.test(line)
+  );
 }
 
+/**
+ * Anchors on every "Sent X ago" line, then walks backwards to collect
+ * [name, ...headlineParts]. Works whether or not "profile picture" alt-text
+ * lines are present — real browser copy-paste usually omits them.
+ */
 export function parseLinkedInText(pastedText: string): ParseResult {
   const lines = pastedText.split("\n").map((l) => l.trim()).filter(Boolean);
   const requests: PendingRequest[] = [];
   const seen = new Set<string>();
   let duplicateDetected = 0;
 
-  let i = 0;
-  while (i < lines.length) {
-    if (!isProfilePictureLine(lines[i])) {
-      i++;
-      continue;
-    }
+  for (let i = 0; i < lines.length; i++) {
+    if (!isSentLine(lines[i])) continue;
 
-    const nameIdx = i + 1;
-    if (nameIdx >= lines.length) { i++; continue; }
+    const sentDaysAgo = parseDaysAgo(lines[i]);
 
-    const name = lines[nameIdx];
-    if (!name || isSkipLine(name) || isProfilePictureLine(name)) { i += 2; continue; }
-
-    // Collect headline lines until "Sent X ago"
-    const headlineParts: string[] = [];
-    let j = nameIdx + 1;
-    let sentDaysAgo = 0;
-    let foundSent = false;
-
-    while (j < lines.length && j < nameIdx + 12) {
+    // Walk backwards from the "Sent" line, collecting candidate lines until
+    // we hit another "Sent" line, a boundary line, or exhaust the look-back.
+    const candidates: string[] = [];
+    for (let j = i - 1; j >= 0 && j >= i - 12; j--) {
       const l = lines[j];
-      if (isSentLine(l)) {
-        sentDaysAgo = parseDaysAgo(l);
-        foundSent = true;
-        j++;
-        if (j < lines.length && isSkipLine(lines[j])) j++;
-        break;
-      }
-      if (isProfilePictureLine(l) || isSkipLine(l)) break;
-      headlineParts.push(l);
-      j++;
+      if (isSentLine(l) || isBoundaryLine(l)) break;
+      candidates.unshift(l); // maintain top-to-bottom order
     }
 
-    if (foundSent) {
-      const key = name.toLowerCase();
-      if (seen.has(key)) {
-        duplicateDetected++;
-      } else {
-        seen.add(key);
-        requests.push({
-          name,
-          headline: headlineParts.join(" · "),
-          sentDaysAgo,
-          sentDate: new Date(Date.now() - sentDaysAgo * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0],
-          linkedinUrl: undefined,
-        });
-      }
-    }
+    if (candidates.length === 0) continue;
 
-    i = j;
+    const name = candidates[0];
+    const headlineParts = candidates.slice(1);
+
+    const key = name.toLowerCase();
+    if (seen.has(key)) {
+      duplicateDetected++;
+    } else {
+      seen.add(key);
+      requests.push({
+        name,
+        headline: headlineParts.join(" · "),
+        sentDaysAgo,
+        sentDate: new Date(Date.now() - sentDaysAgo * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
+        linkedinUrl: undefined,
+      });
+    }
   }
 
   return {

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildSystemPrompt } from "./systemPrompt";
 import { parseResponse, type ParsedMessage } from "./parse";
 import { getEvent, utmFor } from "../config";
@@ -16,12 +17,40 @@ ${profileText || `Job Title: ${contact.jobTitle || "—"}\nNotes: ${contact.note
 Einladungslink für diese Nachricht: ${inviteUrl}`;
 }
 
-export async function generateMessage(
+async function generateWithGemini(
+  contact: Contact,
+  profileText: string,
+  owner: string,
+  apiKey: string
+): Promise<ParsedMessage | null> {
+  try {
+    console.log("[message/gemini] Calling gemini-2.0-flash...");
+    const event = getEvent();
+    const systemPrompt = buildSystemPrompt(event);
+    const userMessage = buildUserMessage(contact, profileText, owner);
+
+    const client = new GoogleGenerativeAI(apiKey);
+    const model = client.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: systemPrompt,
+    });
+    const response = await model.generateContent(userMessage);
+    const text = response.response.text();
+    console.log("[message/gemini] Success, parsing response...");
+    return parseResponse(text);
+  } catch (e) {
+    console.error("[message/gemini] Error:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function generateWithOpenAI(
   contact: Contact,
   profileText: string,
   owner: string,
   apiKey: string
 ): Promise<ParsedMessage> {
+  console.log("[message/openai] Calling gpt-4o-mini fallback...");
   const event = getEvent();
   const systemPrompt = buildSystemPrompt(event);
   const userMessage = buildUserMessage(contact, profileText, owner);
@@ -37,4 +66,23 @@ export async function generateMessage(
   });
 
   return parseResponse(resp.choices[0].message.content ?? "");
+}
+
+export async function generateMessage(
+  contact: Contact,
+  profileText: string,
+  owner: string,
+  geminiKey: string,
+  openaiKey: string
+): Promise<ParsedMessage> {
+  if (geminiKey) {
+    const result = await generateWithGemini(contact, profileText, owner, geminiKey);
+    if (result !== null) return result;
+  }
+
+  if (openaiKey) {
+    return generateWithOpenAI(contact, profileText, owner, openaiKey);
+  }
+
+  throw new Error("No AI provider available — set GEMINI_API_KEY or OPENAI_API_KEY");
 }

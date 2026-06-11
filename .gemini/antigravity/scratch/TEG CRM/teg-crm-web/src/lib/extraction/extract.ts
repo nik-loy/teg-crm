@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildExtractionPrompt } from "./prompt";
 import type { ExtractedProfile } from "./types";
 
@@ -27,10 +28,34 @@ export function parseExtraction(raw: string): ExtractedProfile {
   };
 }
 
-export async function extractProfile(
+async function extractWithGemini(
+  profileText: string,
+  apiKey: string
+): Promise<ExtractedProfile | null> {
+  try {
+    console.log("[extract/gemini] Calling gemini-2.0-flash...");
+    const client = new GoogleGenerativeAI(apiKey);
+    const model = client.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: buildExtractionPrompt(),
+      generationConfig: { responseMimeType: "application/json" },
+    });
+    const response = await model.generateContent(profileText);
+    const raw = response.response.text();
+    const result = parseExtraction(raw);
+    console.log("[extract/gemini] Success:", result.name);
+    return result;
+  } catch (e) {
+    console.error("[extract/gemini] Error:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function extractWithOpenAI(
   profileText: string,
   apiKey: string
 ): Promise<ExtractedProfile> {
+  console.log("[extract/openai] Calling gpt-4o-mini fallback...");
   const client = new OpenAI({ apiKey });
   const resp = await client.chat.completions.create({
     model: "gpt-4o-mini",
@@ -41,4 +66,21 @@ export async function extractProfile(
     ],
   });
   return parseExtraction(resp.choices[0].message.content ?? "");
+}
+
+export async function extractProfile(
+  profileText: string,
+  geminiKey: string,
+  openaiKey: string
+): Promise<ExtractedProfile> {
+  if (geminiKey) {
+    const result = await extractWithGemini(profileText, geminiKey);
+    if (result !== null) return result;
+  }
+
+  if (openaiKey) {
+    return extractWithOpenAI(profileText, openaiKey);
+  }
+
+  throw new Error("No AI provider available — set GEMINI_API_KEY or OPENAI_API_KEY");
 }

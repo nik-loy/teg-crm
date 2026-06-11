@@ -3,10 +3,12 @@ import { env } from "@/lib/env";
 import { extractFromImage } from "@/lib/extraction/screenshot";
 
 export async function POST(req: Request) {
-  const apiKey = env.openaiKey();
-  if (!apiKey) {
+  const geminiKey = env.geminiKey();
+  const openaiKey = env.openaiKey();
+
+  if (!geminiKey && !openaiKey) {
     return NextResponse.json(
-      { error: "OpenAI API key not configured" },
+      { error: "No vision API configured (set GEMINI_API_KEY or OPENAI_API_KEY)" },
       { status: 501 }
     );
   }
@@ -29,15 +31,22 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log("[screenshots] Processing", images.length, "images");
     const results = await Promise.all(
-      images.map((b64) => extractFromImage(b64, apiKey))
+      images.map((b64, idx) => {
+        console.log(`[screenshots] Image ${idx + 1}/${images.length}: base64 length ${b64.length}`);
+        return extractFromImage(b64, geminiKey, openaiKey);
+      })
     );
     const contacts = results.flat();
+    console.log("[screenshots] Success: extracted", contacts.length, "total contacts");
     return NextResponse.json({ contacts });
   } catch (e) {
-    console.error("[screenshots]", e);
+    const errorMsg =
+      e instanceof Error ? e.message : "Vision extraction failed";
+    console.error("[screenshots] Fatal error:", errorMsg, e);
     return NextResponse.json(
-      { error: "Vision extraction failed" },
+      { error: errorMsg },
       { status: 500 }
     );
   }

@@ -6,10 +6,12 @@ import { pageToContact } from "@/lib/notion/map";
 import { generateMessage } from "@/lib/message/generate";
 
 export async function POST(req: Request) {
-  const apiKey = env.openaiKey();
-  if (!apiKey) {
+  const geminiKey = env.geminiKey();
+  const openaiKey = env.openaiKey();
+
+  if (!geminiKey && !openaiKey) {
     return NextResponse.json(
-      { error: "OpenAI API key not configured" },
+      { error: "No AI provider configured — set GEMINI_API_KEY or OPENAI_API_KEY" },
       { status: 501 }
     );
   }
@@ -40,7 +42,8 @@ export async function POST(req: Request) {
       contact,
       profileText?.trim() ?? "",
       owner?.trim() ?? "",
-      apiKey
+      geminiKey,
+      openaiKey
     );
     return NextResponse.json(result);
   } catch (e) {

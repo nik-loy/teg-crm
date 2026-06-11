@@ -1,14 +1,55 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/lib/env";
 import { getEvent } from "@/lib/config";
 import { buildFollowupPrompt, isPositiveReply } from "@/lib/message/followup";
 
+async function generateFollowupWithGemini(
+  systemPrompt: string,
+  apiKey: string
+): Promise<string | null> {
+  try {
+    console.log("[followup/gemini] Calling gemini-2.0-flash...");
+    const client = new GoogleGenerativeAI(apiKey);
+    const model = client.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: systemPrompt,
+    });
+    const response = await model.generateContent("Generiere die Follow-up Antwort.");
+    const text = response.response.text().trim();
+    console.log("[followup/gemini] Success");
+    return text;
+  } catch (e) {
+    console.error("[followup/gemini] Error:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function generateFollowupWithOpenAI(
+  systemPrompt: string,
+  apiKey: string
+): Promise<string> {
+  console.log("[followup/openai] Calling gpt-4o-mini fallback...");
+  const client = new OpenAI({ apiKey });
+  const resp = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    max_tokens: 200,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: "Generiere die Follow-up Antwort." },
+    ],
+  });
+  return resp.choices[0].message.content?.trim() ?? "";
+}
+
 export async function POST(req: Request) {
-  const apiKey = env.openaiKey();
-  if (!apiKey) {
+  const geminiKey = env.geminiKey();
+  const openaiKey = env.openaiKey();
+
+  if (!geminiKey && !openaiKey) {
     return NextResponse.json(
-      { error: "OpenAI API key not configured" },
+      { error: "No AI provider configured — set GEMINI_API_KEY or OPENAI_API_KEY" },
       { status: 501 }
     );
   }
@@ -33,19 +74,21 @@ export async function POST(req: Request) {
   const systemPrompt = buildFollowupPrompt(event, reply.trim(), resolvedAnrede);
 
   try {
-    const client = new OpenAI({ apiKey });
-    const resp = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 200,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: "Generiere die Follow-up Antwort." },
-      ],
-    });
+    let text: string | null = null;
 
-    const text = resp.choices[0].message.content?.trim() ?? "";
+    if (geminiKey) {
+      text = await generateFollowupWithGemini(systemPrompt, geminiKey);
+    }
+
+    if (text === null && openaiKey) {
+      text = await generateFollowupWithOpenAI(systemPrompt, openaiKey);
+    }
+
+    if (text === null) {
+      throw new Error("All AI providers failed");
+    }
+
     const positive = isPositiveReply(reply.trim());
-
     return NextResponse.json({ text, positive });
   } catch (e) {
     console.error("[followup]", e);

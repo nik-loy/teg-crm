@@ -41,6 +41,37 @@ Product Manager at Google
 Sent 2 weeks ago
 Withdraw`;
 
+// "X ago" WITHOUT "Sent" prefix — LinkedIn sometimes omits it
+const FIXTURE_NO_SENT_PREFIX = `Julia Bauer
+Senior Product Manager at Microsoft
+1 week ago
+Withdraw
+Thomas Richter
+Engineering Manager at Amazon
+3 days ago
+Withdraw`;
+
+// Hours-ago format (triggers sentDaysAgo = 0)
+const FIXTURE_HOURS_AGO = `Lena Hoffman
+UX Designer at Figma
+2 hours ago
+Withdraw`;
+
+// Withdraw-only (no time line at all — edge case)
+const FIXTURE_WITHDRAW_ONLY = `Klaus Werner
+CEO at TechStartup Munich
+Withdraw`;
+
+// German LinkedIn format
+const FIXTURE_GERMAN = `Markus Becker
+Softwareentwickler bei SAP
+Gesendet vor 2 Wochen
+Zurückziehen
+Sandra Maier
+Marketing Manager bei BMW
+Vor 5 Tagen
+Zurückziehen`;
+
 vi.mock("openai", () => {
   return {
     default: vi.fn().mockImplementation(() => ({
@@ -142,6 +173,80 @@ describe("parseLinkedInText — multi-line headline", () => {
 
   it("converts 3 days ago correctly", () => {
     expect(parseLinkedInText(FIXTURE_MULTILINE_HEADLINE).requests[0].sentDaysAgo).toBe(3);
+  });
+});
+
+// ─── parseLinkedInText — "X ago" without "Sent" prefix ──────────────────────
+
+describe("parseLinkedInText — no 'Sent' prefix", () => {
+  it("parses 2 requests from '1 week ago' format", () => {
+    expect(parseLinkedInText(FIXTURE_NO_SENT_PREFIX).requests).toHaveLength(2);
+  });
+
+  it("extracts correct names", () => {
+    const r = parseLinkedInText(FIXTURE_NO_SENT_PREFIX);
+    expect(r.requests[0].name).toBe("Julia Bauer");
+    expect(r.requests[1].name).toBe("Thomas Richter");
+  });
+
+  it("converts 1 week ago to 7 days", () => {
+    expect(parseLinkedInText(FIXTURE_NO_SENT_PREFIX).requests[0].sentDaysAgo).toBe(7);
+  });
+
+  it("converts 3 days ago correctly", () => {
+    expect(parseLinkedInText(FIXTURE_NO_SENT_PREFIX).requests[1].sentDaysAgo).toBe(3);
+  });
+});
+
+// ─── parseLinkedInText — hours ago ───────────────────────────────────────────
+
+describe("parseLinkedInText — hours ago", () => {
+  it("parses entry with '2 hours ago'", () => {
+    expect(parseLinkedInText(FIXTURE_HOURS_AGO).requests).toHaveLength(1);
+  });
+
+  it("sets sentDaysAgo to 0 for hours", () => {
+    expect(parseLinkedInText(FIXTURE_HOURS_AGO).requests[0].sentDaysAgo).toBe(0);
+  });
+
+  it("extracts correct name", () => {
+    expect(parseLinkedInText(FIXTURE_HOURS_AGO).requests[0].name).toBe("Lena Hoffman");
+  });
+});
+
+// ─── parseLinkedInText — German LinkedIn ─────────────────────────────────────
+
+describe("parseLinkedInText — German LinkedIn", () => {
+  it("parses 2 requests from German format", () => {
+    expect(parseLinkedInText(FIXTURE_GERMAN).requests).toHaveLength(2);
+  });
+
+  it("extracts correct German names", () => {
+    const r = parseLinkedInText(FIXTURE_GERMAN);
+    expect(r.requests[0].name).toBe("Markus Becker");
+    expect(r.requests[1].name).toBe("Sandra Maier");
+  });
+
+  it("converts 'vor 2 Wochen' to 14 days", () => {
+    expect(parseLinkedInText(FIXTURE_GERMAN).requests[0].sentDaysAgo).toBe(14);
+  });
+
+  it("converts 'Vor 5 Tagen' to 5 days", () => {
+    expect(parseLinkedInText(FIXTURE_GERMAN).requests[1].sentDaysAgo).toBe(5);
+  });
+});
+
+// ─── parseLinkedInText — Withdraw-anchor fallback ────────────────────────────
+
+describe("parseLinkedInText — Withdraw anchor (no time line)", () => {
+  it("extracts name when no time line present", () => {
+    const r = parseLinkedInText(FIXTURE_WITHDRAW_ONLY);
+    expect(r.requests).toHaveLength(1);
+    expect(r.requests[0].name).toBe("Klaus Werner");
+  });
+
+  it("sets sentDaysAgo to 0 when no time line", () => {
+    expect(parseLinkedInText(FIXTURE_WITHDRAW_ONLY).requests[0].sentDaysAgo).toBe(0);
   });
 });
 

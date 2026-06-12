@@ -8,87 +8,215 @@ interface RawParsed {
   stats?: Record<string, number>;
 }
 
-// ─── Pure text parser (primary — no API calls) ────────────────────────────────
+// ─── Time helpers ─────────────────────────────────────────────────────────────
 
 function parseDaysAgo(text: string): number {
-  const m = text.match(/(\d+)\s+(day|week|month)s?/i);
-  if (!m) return 0;
-  const n = parseInt(m[1], 10);
-  const unit = m[2].toLowerCase();
-  if (unit === "day") return n;
-  if (unit === "week") return n * 7;
-  if (unit === "month") return n * 30;
+  // English: handles seconds/minutes/hours → same day (0)
+  const eng = text.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?/i);
+  if (eng) {
+    const n = parseInt(eng[1], 10);
+    const unit = eng[2].toLowerCase();
+    if (["second", "minute", "hour"].includes(unit)) return 0;
+    if (unit === "day") return n;
+    if (unit === "week") return n * 7;
+    if (unit === "month") return n * 30;
+    if (unit === "year") return n * 365;
+  }
+  // German: Sekunden/Minuten/Stunden → same day
+  const deu = text.match(/(\d+)\s+(Sekunde|Minute|Stunde|Tag|Woche|Monat|Jahr)/i);
+  if (deu) {
+    const n = parseInt(deu[1], 10);
+    const unit = deu[2].toLowerCase();
+    if (["sekunde", "minute", "stunde"].includes(unit)) return 0;
+    if (unit === "tag") return n;
+    if (unit === "woche") return n * 7;
+    if (unit === "monat") return n * 30;
+    if (unit === "jahr") return n * 365;
+  }
+  if (/yesterday|gestern/i.test(text)) return 1;
   return 0;
 }
 
-function isSentLine(line: string): boolean {
-  return /^Sent\s+(\d+\s+(day|week|month)s?\s+ago|just\s+now|today)/i.test(line);
-}
-
-// Lines that mark a block boundary but are never a name/headline
-function isBoundaryLine(line: string): boolean {
-  // "Withdraw", "Cancel" buttons; image alt text like "John's profile picture"
-  return (
-    /^(Withdraw|Cancel|Message|Connect|Follow|Remove|Pending)$/i.test(line) ||
-    /profile picture$/i.test(line)
-  );
-}
-
 /**
- * Anchors on every "Sent X ago" line, then walks backwards to collect
- * [name, ...headlineParts]. Works whether or not "profile picture" alt-text
- * lines are present — real browser copy-paste usually omits them.
+ * Matches the "time since sent" line in various LinkedIn UI formats:
+ *   English : "Sent 1 week ago", "2 hours ago", "just now", "yesterday"
+ *   German  : "Gesendet vor 1 Woche", "Vor 2 Tagen", "gestern"
  */
-export function parseLinkedInText(pastedText: string): ParseResult {
-  const lines = pastedText.split("\n").map((l) => l.trim()).filter(Boolean);
+function isTimeLine(line: string): boolean {
+  // "Sent X unit ago" | "X unit ago" | "just now" | "today" | "yesterday"
+  if (
+    /^(Sent\s+)?(\d+\s+(second|minute|hour|day|week|month|year)s?\s+ago|just\s+now|today|yesterday)$/i.test(
+      line
+    )
+  )
+    return true;
+  // German: "Gesendet vor 1 Woche", "Vor 3 Tagen", "heute", "gestern"
+  // Use \w* to absorb plural suffixes (Wochen, Tagen, Monaten, Jahren, …)
+  if (
+    /^(Gesendet\s+)?(Vor\s+\d+\s+(Sekunde|Minute|Stunde|Tag|Woche|Monat|Jahr)\w*|heute|gestern)/i.test(
+      line
+    )
+  )
+    return true;
+  // LinkedIn sometimes shows abbreviated: "1w", "2mo", "3d" — unlikely in copy-paste but safe to handle
+  if (/^\d+(s|m|h|d|w|mo)$/.test(line)) return true;
+  return false;
+}
+
+// ─── Boundary/button lines ────────────────────────────────────────────────────
+
+function isWithdrawLine(line: string): boolean {
+  return /^(Withdraw|Zurückziehen|Anfrage\s+zurückziehen)$/i.test(line);
+}
+
+function isBoundaryLine(line: string): boolean {
+  // English button labels
+  if (/^(Withdraw|Cancel|Message|Connect|Follow|Remove|Pending)$/i.test(line)) return true;
+  // German button labels
+  if (
+    /^(Zurückziehen|Anfrage\s+zurückziehen|Abbrechen|Nachricht|Verbinden|Folgen|Entfernen|Ausstehend)$/i.test(
+      line
+    )
+  )
+    return true;
+  // Image alt-text included by some browsers
+  if (/profile picture$/i.test(line)) return true;
+  if (/profilbild$/i.test(line)) return true;
+  return false;
+}
+
+// ─── Strategy 1: anchor on time-line ("Sent 1 week ago", "2 hours ago", …) ───
+
+function extractByTimeLine(
+  lines: string[],
+  seen: Set<string>
+): { requests: PendingRequest[]; duplicates: number } {
   const requests: PendingRequest[] = [];
-  const seen = new Set<string>();
-  let duplicateDetected = 0;
+  let duplicates = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    if (!isSentLine(lines[i])) continue;
-
+    if (!isTimeLine(lines[i])) continue;
     const sentDaysAgo = parseDaysAgo(lines[i]);
 
-    // Walk backwards from the "Sent" line, collecting candidate lines until
-    // we hit another "Sent" line, a boundary line, or exhaust the look-back.
+    // Walk backwards collecting name + headline candidates
     const candidates: string[] = [];
     for (let j = i - 1; j >= 0 && j >= i - 12; j--) {
       const l = lines[j];
-      if (isSentLine(l) || isBoundaryLine(l)) break;
-      candidates.unshift(l); // maintain top-to-bottom order
+      if (isTimeLine(l) || isBoundaryLine(l)) break;
+      candidates.unshift(l);
     }
-
     if (candidates.length === 0) continue;
 
-    const name = candidates[0];
-    const headlineParts = candidates.slice(1);
+    const filtered = candidates.filter((l) => !/profile picture|profilbild/i.test(l));
+    if (filtered.length === 0) continue;
 
+    const name = filtered[0];
     const key = name.toLowerCase();
-    if (seen.has(key)) {
-      duplicateDetected++;
-    } else {
-      seen.add(key);
-      requests.push({
-        name,
-        headline: headlineParts.join(" · "),
-        sentDaysAgo,
-        sentDate: new Date(Date.now() - sentDaysAgo * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        linkedinUrl: undefined,
-      });
+    if (seen.has(key)) { duplicates++; continue; }
+    seen.add(key);
+    requests.push({
+      name,
+      headline: filtered.slice(1).join(" · "),
+      sentDaysAgo,
+      sentDate: new Date(Date.now() - sentDaysAgo * 86400000).toISOString().split("T")[0],
+      linkedinUrl: undefined,
+    });
+  }
+
+  return { requests, duplicates };
+}
+
+// ─── Strategy 2: anchor on "Withdraw" button ──────────────────────────────────
+
+function extractByWithdraw(
+  lines: string[],
+  seen: Set<string>
+): { requests: PendingRequest[]; duplicates: number } {
+  const requests: PendingRequest[] = [];
+  let duplicates = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!isWithdrawLine(lines[i])) continue;
+
+    // Look for a time-line in the 6 lines above Withdraw
+    let timeIdx = -1;
+    let sentDaysAgo = 0;
+    for (let j = i - 1; j >= 0 && j >= i - 6; j--) {
+      if (isTimeLine(lines[j])) {
+        timeIdx = j;
+        sentDaysAgo = parseDaysAgo(lines[j]);
+        break;
+      }
     }
+
+    // Collect name + headline above the time-line (or directly above Withdraw if no time line)
+    const aboveLine = timeIdx !== -1 ? timeIdx - 1 : i - 1;
+    const candidates: string[] = [];
+    for (let j = aboveLine; j >= 0 && j >= aboveLine - 10; j--) {
+      const l = lines[j];
+      if (isWithdrawLine(l) || isTimeLine(l) || isBoundaryLine(l)) break;
+      candidates.unshift(l);
+    }
+    if (candidates.length === 0) continue;
+
+    const filtered = candidates.filter((l) => !/profile picture|profilbild/i.test(l));
+    if (filtered.length === 0) continue;
+
+    const name = filtered[0];
+    const key = name.toLowerCase();
+    if (seen.has(key)) { duplicates++; continue; }
+    seen.add(key);
+    requests.push({
+      name,
+      headline: filtered.slice(1).join(" · "),
+      sentDaysAgo,
+      sentDate: new Date(Date.now() - sentDaysAgo * 86400000).toISOString().split("T")[0],
+      linkedinUrl: undefined,
+    });
+  }
+
+  return { requests, duplicates };
+}
+
+// ─── Public pure-text entry point ─────────────────────────────────────────────
+
+export function parseLinkedInText(pastedText: string): ParseResult {
+  const lines = pastedText.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // Strategy 1: anchor on time-line ("Sent 1 week ago", "2 hours ago", "vor 3 Tagen", …)
+  const seen1 = new Set<string>();
+  const s1 = extractByTimeLine(lines, seen1);
+  if (s1.requests.length > 0) {
+    return {
+      success: true,
+      requests: s1.requests,
+      errors: [],
+      stats: { totalLines: lines.length, parsed: s1.requests.length, failed: 0, duplicateDetected: s1.duplicates },
+    };
+  }
+
+  // Strategy 2: anchor on "Withdraw" button (handles formats where time line is absent/unrecognised)
+  const seen2 = new Set<string>();
+  const s2 = extractByWithdraw(lines, seen2);
+  if (s2.requests.length > 0) {
+    return {
+      success: true,
+      requests: s2.requests,
+      errors: [],
+      stats: { totalLines: lines.length, parsed: s2.requests.length, failed: 0, duplicateDetected: s2.duplicates },
+    };
   }
 
   return {
-    success: requests.length > 0,
-    requests,
-    errors:
-      requests.length === 0
-        ? [{ reason: "No pending requests found — paste the full page text from LinkedIn's Sent Invitations tab" }]
-        : [],
-    stats: { totalLines: lines.length, parsed: requests.length, failed: 0, duplicateDetected },
+    success: false,
+    requests: [],
+    errors: [
+      {
+        reason:
+          "No pending requests found — paste the full page text from LinkedIn's Sent Invitations tab",
+      },
+    ],
+    stats: { totalLines: lines.length, parsed: 0, failed: 0, duplicateDetected: 0 },
   };
 }
 
@@ -111,7 +239,7 @@ function enrichRequests(raw: RawParsed, totalLines: number): ParseResult {
       name: r.name!.trim(),
       headline: r.headline?.trim() ?? "",
       sentDaysAgo: r.sentDaysAgo ?? 0,
-      sentDate: new Date(now.getTime() - (r.sentDaysAgo ?? 0) * 24 * 60 * 60 * 1000)
+      sentDate: new Date(now.getTime() - (r.sentDaysAgo ?? 0) * 86400000)
         .toISOString()
         .split("T")[0],
       linkedinUrl: undefined,

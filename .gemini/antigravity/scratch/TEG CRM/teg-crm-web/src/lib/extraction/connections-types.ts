@@ -5,6 +5,18 @@ export interface Connection {
   linkedinUrl?: string;
 }
 
+export interface MessageParseResult {
+  success: boolean;
+  names: string[];
+  errors: Array<{ reason: string }>;
+  stats: {
+    totalLines: number;
+    parsed: number;
+    failed: number;
+    duplicateDetected: number;
+  };
+}
+
 export interface ConnectionParseResult {
   success: boolean;
   connections: Connection[];

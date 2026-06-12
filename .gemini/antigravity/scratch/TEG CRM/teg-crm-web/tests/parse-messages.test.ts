@@ -1,61 +1,61 @@
 import { describe, it, expect } from "vitest";
 import { parseLinkedInMessages } from "../src/lib/extraction/parse-connections";
 
-const EN_SAMPLE = `Raphael de Boer
+const EN_SAMPLE = `Thomas Weber
 Jun 8
-You: Hahahaha seems legit 👀👀
+You: Looking forward to connecting!
 
 . Active conversation. Press return to go to conversation details
-Open the options list in your conversation with Niklas Loycke and Raphael de Boer
-Toni Wiemeyer, #HIRINGStatus is reachable
-Toni Wiemeyer
+Open the options list in your conversation with Alex Rep and Thomas Weber
+Anna Schmidt, #HIRINGStatus is reachable
+Anna Schmidt
 Jun 5
 Jun 5
-Toni: Hi Niklas, vielen Dank für deine Nachricht und die Einladung.
+Anna: Hi, thanks for reaching out — happy to connect!
 
 . Press return to go to conversation details
-Open the options list in your conversation with Toni Wiemeyer and Niklas Loycke
-Sparsh TyagiStatus is reachable
-Sparsh Tyagi
+Open the options list in your conversation with Anna Schmidt and Alex Rep
+Marco FischerStatus is reachable
+Marco Fischer
 Jun 5
 Jun 5
-Sparsh: Hi Niklas, danke für die Vernetzung!
+Marco: Hi, great to connect with you!
 
 . Press return to go to conversation details
-Open the options list in your conversation with Sparsh Tyagi and Niklas Loycke
-Maria Luisa Romero Toro
+Open the options list in your conversation with Marco Fischer and Alex Rep
+Sarah Johnson-Miller
 
-Maria Luisa Romero Toro
+Sarah Johnson-Miller
 Jun 5
 Jun 5
 Sponsored Go beyond the classroom—learn from industry leaders
 
 . Press return to go to conversation details
-Open the options list in your conversation with Maria Luisa Romero Toro
-Vignesh ChandrasekaranStatus is reachable
-Vignesh Chandrasekaran
+Open the options list in your conversation with Sarah Johnson-Miller
+David van der BergStatus is reachable
+David van der Berg
 Jun 5
 Jun 5
-Vignesh: 👍
+David: Thanks for the connection request!
 
 . Press return to go to conversation details
-Open the options list in your conversation with Niklas Loycke and Vignesh Chandrasekaran
-Dario Menzen
-Dario Menzen
+Open the options list in your conversation with Alex Rep and David van der Berg
+Klaus Bauer
+Klaus Bauer
 Jun 3
 Jun 3
-You: Hallo Herr Menzen, vielen Dank für die Vernetzung.
+You: Hi Klaus, thanks for connecting — happy to be in touch!
 
 . Press return to go to conversation details
-Open the options list in your conversation with Dario Menzen and Niklas Loycke
-Jan-Marco Müller
-Jan-Marco Müller
+Open the options list in your conversation with Klaus Bauer and Alex Rep
+Hans-Peter Lange
+Hans-Peter Lange
 Jun 3
 Jun 3
-You: Hallo Herr Müller, vielen Dank für die Vernetzung.
+You: Hi Hans-Peter, great to connect — let me know if you'd like to chat.
 
 . Press return to go to conversation details
-Open the options list in your conversation with Jan-Marco Müller and Niklas Loycke`;
+Open the options list in your conversation with Hans-Peter Lange and Alex Rep`;
 
 const DE_SAMPLE = `Nachrichten
 Nachrichten durchsuchen
@@ -63,70 +63,70 @@ Neue Nachricht verfassen
 Jobs Ungelesen Kontakte InMail Als Favorit markiert
 Zu den Informationen über das aktuelle Gespräch wechseln
 Liste der UnterhaltungenHinweis zur Verwendung von Bildschirmlesegeräten: Die Ergebnisse der Nachrichten werden kontinuierlich aktualisiert.
-Diane Ebinger
-Diane Ebinger
+Lisa Hoffmann
+Lisa Hoffmann
 12:16
 12:16
-Sie: Hi Diane, dankeschön für die schnelle Antwort.
+Sie: Hallo Lisa, vielen Dank für Ihre schnelle Antwort!
 
 . Aktuelle Unterhaltung. Drücken Sie die Eingabetaste, um zu den Details der Unterhaltung zu wechseln.
-Liste der Optionen in Ihrer Unterhaltung mit Diane Ebinger und Jonas Böhrer öffnen
-Shuhan Xiao
-Shuhan Xiao
+Liste der Optionen in Ihrer Unterhaltung mit Lisa Hoffmann und Jonas Vertrieb öffnen
+Kevin Braun
+Kevin Braun
 10:16
 10:16
-Sie: Hey Shuhan, danke fürs Vernetzen!
+Sie: Hey Kevin, danke fürs Vernetzen!
 
 . Drücken Sie die Eingabetaste, um zu den Details der Unterhaltung zu wechseln.
-Liste der Optionen in Ihrer Unterhaltung mit Shuhan Xiao und Jonas Böhrer öffnen
-Nikita Makarov
-Nikita Makarov
+Liste der Optionen in Ihrer Unterhaltung mit Kevin Braun und Jonas Vertrieb öffnen
+Peter Schwartz
+Peter Schwartz
 10:14
 10:14
-Sie: Hey Nikita, danke fürs Vernetzen!
+Sie: Hey Peter, schön, dass wir verbunden sind!
 
 . Drücken Sie die Eingabetaste, um zu den Details der Unterhaltung zu wechseln.
-Liste der Optionen in Ihrer Unterhaltung mit Nikita Makarov und Jonas Böhrer öffnen
-Dr. Wing Ki (Catherine) Wong
-Dr. Wing Ki (Catherine) Wong
+Liste der Optionen in Ihrer Unterhaltung mit Peter Schwartz und Jonas Vertrieb öffnen
+Dr. María Elena García
+Dr. María Elena García
 10:12
 10:12
-Sie: Hallo Frau Wong, danke für die Vernetzung!
+Sie: Hallo Frau García, freut mich, mit Ihnen vernetzt zu sein!
 
 . Drücken Sie die Eingabetaste, um zu den Details der Unterhaltung zu wechseln.
-Liste der Optionen in Ihrer Unterhaltung mit Dr. Wing Ki (Catherine) Wong und Jonas Böhrer öffnen
-Michal Swiat
-Michal Swiat
+Liste der Optionen in Ihrer Unterhaltung mit Dr. María Elena García und Jonas Vertrieb öffnen
+Jan Nowak
+Jan Nowak
 10:11
 10:11
-Sie: Hey Michal, thanks for connecting!
+Sie: Hey Jan, thanks for connecting!
 
 . Drücken Sie die Eingabetaste, um zu den Details der Unterhaltung zu wechseln.
-Liste der Optionen in Ihrer Unterhaltung mit Michal Swiat und Jonas Böhrer öffnen`;
+Liste der Optionen in Ihrer Unterhaltung mit Jan Nowak und Jonas Vertrieb öffnen`;
 
 describe("parseLinkedInMessages", () => {
   describe("English LinkedIn UI", () => {
     it("extracts names from EN paste", () => {
       const result = parseLinkedInMessages(EN_SAMPLE);
       expect(result.success).toBe(true);
-      expect(result.names).toContain("Raphael de Boer");
-      expect(result.names).toContain("Toni Wiemeyer");
-      expect(result.names).toContain("Sparsh Tyagi");
-      expect(result.names).toContain("Maria Luisa Romero Toro");
-      expect(result.names).toContain("Vignesh Chandrasekaran");
-      expect(result.names).toContain("Dario Menzen");
-      expect(result.names).toContain("Jan-Marco Müller");
+      expect(result.names).toContain("Thomas Weber");
+      expect(result.names).toContain("Anna Schmidt");
+      expect(result.names).toContain("Marco Fischer");
+      expect(result.names).toContain("Sarah Johnson-Miller");
+      expect(result.names).toContain("David van der Berg");
+      expect(result.names).toContain("Klaus Bauer");
+      expect(result.names).toContain("Hans-Peter Lange");
     });
 
-    it("strips EN status suffix 'TyagiStatus is reachable'", () => {
+    it("strips EN status suffix 'FischerStatus is reachable'", () => {
       const result = parseLinkedInMessages(EN_SAMPLE);
-      expect(result.names).toContain("Sparsh Tyagi");
-      expect(result.names).not.toContain("Sparsh TyagiStatus is reachable");
+      expect(result.names).toContain("Marco Fischer");
+      expect(result.names).not.toContain("Marco FischerStatus is reachable");
     });
 
     it("strips EN comma-status suffix '#HIRINGStatus is reachable'", () => {
       const result = parseLinkedInMessages(EN_SAMPLE);
-      expect(result.names).toContain("Toni Wiemeyer");
+      expect(result.names).toContain("Anna Schmidt");
       expect(result.names.some(n => n.includes("#HIRING"))).toBe(false);
     });
 
@@ -141,11 +141,11 @@ describe("parseLinkedInMessages", () => {
     it("extracts names from DE paste", () => {
       const result = parseLinkedInMessages(DE_SAMPLE);
       expect(result.success).toBe(true);
-      expect(result.names).toContain("Diane Ebinger");
-      expect(result.names).toContain("Shuhan Xiao");
-      expect(result.names).toContain("Nikita Makarov");
-      expect(result.names).toContain("Dr. Wing Ki (Catherine) Wong");
-      expect(result.names).toContain("Michal Swiat");
+      expect(result.names).toContain("Lisa Hoffmann");
+      expect(result.names).toContain("Kevin Braun");
+      expect(result.names).toContain("Peter Schwartz");
+      expect(result.names).toContain("Dr. María Elena García");
+      expect(result.names).toContain("Jan Nowak");
     });
 
     it("ignores UI chrome lines (Nachrichten, Jobs Ungelesen, etc.)", () => {

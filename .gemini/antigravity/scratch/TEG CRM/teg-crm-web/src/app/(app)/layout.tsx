@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard } from "lucide-react";
+import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/add", label: "Add Contact", icon: UserPlus },
+  { href: "/pending-requests", label: "Pending Req.", icon: Inbox },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/screenshots", label: "Screenshots", icon: Camera },
   { href: "/contacts", label: "Contacts", icon: Users },

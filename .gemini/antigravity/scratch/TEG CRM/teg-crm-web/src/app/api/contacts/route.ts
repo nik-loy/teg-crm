@@ -4,6 +4,7 @@ import { findByUrl, findByName, resolveMerge, queryAll } from "@/lib/notion/cont
 import { notion, withRetry } from "@/lib/notion/client";
 import { title, richText, select, url as propUrl, date, multiSelect } from "@/lib/notion/props";
 import { pageToContact } from "@/lib/notion/map";
+import { extractNameFromLinkedInUrl } from "@/lib/linkedin-utils";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
 export function normalizeLinkedInUrl(raw: string): string {
@@ -24,11 +25,24 @@ const STATUS_MAP: Record<string, string> = {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name, jobTitle, tier, status, owner, notes, profileSummary, company, events } = body;
+  const { name: providedName, jobTitle, tier, status, owner, notes, profileSummary, company, events } = body;
   const rawUrl: string | undefined = body.url;
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  // Try to infer name from multiple sources
+  let name = providedName?.trim() || "";
+
+  if (!name && rawUrl) {
+    // Try to extract from LinkedIn URL
+    name = extractNameFromLinkedInUrl(rawUrl);
+  }
+
+  if (!name) {
+    return NextResponse.json(
+      {
+        error: "Cannot determine contact name. Please provide a name, LinkedIn profile URL, or paste LinkedIn profile text."
+      },
+      { status: 400 }
+    );
   }
 
   const dbId = env.contactsDb();

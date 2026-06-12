@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildPendingRequestsPrompt } from "./pending-requests-prompt";
 import type { PendingRequest, ParseResult } from "./pending-requests-types";
@@ -289,60 +288,45 @@ async function parseWithGemini(pastedText: string, apiKey: string): Promise<RawP
   }
 }
 
-async function parseWithOpenAI(pastedText: string, apiKey: string): Promise<RawParsed> {
-  console.log("[pending-requests/openai] Calling gpt-4o-mini...");
-  const client = new OpenAI({ apiKey });
-  const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: buildPendingRequestsPrompt() },
-      { role: "user", content: pastedText },
-    ],
-    temperature: 0,
-  });
-  const content = resp.choices[0].message.content ?? "{}";
-  return JSON.parse(content);
-}
-
 // ─── Public entry point ───────────────────────────────────────────────────────
+
+export interface ParseOptions {
+  /** Gemini API key. Only used when `allowAiFallback` is true. */
+  geminiKey?: string;
+  /**
+   * Opt-in to the Gemini fallback for inputs the pure-text parser cannot handle.
+   * OFF by default — the parser never makes a network call or incurs any cost
+   * unless this is explicitly enabled (env: PENDING_REQUESTS_AI_FALLBACK=1).
+   * NOTE: there is intentionally NO OpenAI path — it was removed to guarantee
+   * zero paid-API usage (the source of the previous 429 quota errors).
+   */
+  allowAiFallback?: boolean;
+}
 
 export async function parsePendingRequests(
   pastedText: string,
-  geminiKey: string,
-  openaiKey: string
+  options: ParseOptions = {}
 ): Promise<ParseResult> {
-  const totalLines = pastedText.split("\n").length;
+  const { geminiKey = "", allowAiFallback = false } = options;
 
-  // 1. Pure text parser — no API call, no rate limits, zero cost
+  // 1. Pure text parser — no API call, no rate limits, zero cost. This is the default.
   const textResult = parseLinkedInText(pastedText);
   if (textResult.success) return textResult;
 
-  console.log("[pending-requests/text] 0 results — falling back to AI");
-
-  // 2. Gemini fallback (if text structure was unexpected)
-  // 3. OpenAI last resort
-  try {
-    let parsed: RawParsed | null = null;
-
-    if (geminiKey) {
-      parsed = await parseWithGemini(pastedText, geminiKey);
+  // 2. Optional Gemini fallback — disabled unless explicitly opted in AND a key exists.
+  //    Free-tier Gemini only; can still be rate-limited, so it degrades gracefully
+  //    back to the helpful text-parser message rather than surfacing an API error.
+  if (allowAiFallback && geminiKey) {
+    console.log("[pending-requests/text] 0 results — AI fallback enabled, trying Gemini");
+    const parsed = await parseWithGemini(pastedText, geminiKey);
+    if (parsed) {
+      const enriched = enrichRequests(parsed, pastedText.split("\n").length);
+      if (enriched.success) return enriched;
     }
-    if (!parsed && openaiKey) {
-      parsed = await parseWithOpenAI(pastedText, openaiKey);
-    }
-    if (!parsed) {
-      throw new Error("No AI provider available — set GEMINI_API_KEY or OPENAI_API_KEY");
-    }
-
-    return enrichRequests(parsed, totalLines);
-  } catch (e) {
-    console.error("[pending-requests/parse] Fatal:", e instanceof Error ? e.message : e);
-    return {
-      success: false,
-      requests: [],
-      errors: [{ reason: e instanceof Error ? e.message : "AI parsing failed" }],
-      stats: { totalLines, parsed: 0, failed: 1, duplicateDetected: 0 },
-    };
+    console.log("[pending-requests/gemini] no usable result — returning text-parser message");
   }
+
+  // 3. Default outcome when nothing was found: the cost-free, helpful message from the
+  //    text parser ("paste the full Sent page…"). Never an API/quota error.
+  return textResult;
 }

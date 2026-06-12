@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { parsePendingRequests, parseLinkedInText } from "../src/lib/extraction/parse-pending-requests";
 
 // Real browser copy-paste: NO "profile picture" lines (most common case)
@@ -72,39 +72,67 @@ Marketing Manager bei BMW
 Vor 5 Tagen
 Zurückziehen`;
 
-vi.mock("openai", () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            choices: [
-              {
-                message: {
-                  content: JSON.stringify({
-                    requests: [
-                      {
-                        name: "Aliosha Milsztein",
-                        headline: "Agentic AI @ Personio I Founding CEO @ aurio (acq. by Personio) I CDTM",
-                        sentDaysAgo: 7,
-                      },
-                      {
-                        name: "Elisabeth Neurauter",
-                        headline: "Director Strategic Accounts at Snowflake | Ex-BCG",
-                        sentDaysAgo: 7,
-                      },
-                    ],
-                    stats: { totalLines: 8, parsed: 2, failed: 0, duplicateDetected: 0 },
-                  }),
-                },
-              },
-            ],
-          }),
-        },
-      },
-    })),
-  };
-});
+// Real-world paste reported by a sales rep (Formycon AG cohort): "profile picture"
+// alt-text lines + "Sent X minutes ago" + curly apostrophes. This is the exact shape
+// that previously fell through to the AI fallback and 429'd. It MUST parse purely.
+const FIXTURE_REAL_FORMYCON = `Alessia Peduzzo
+
+Senior Scientist Project Analytics at Formycon AG
+
+Sent 50 minutes ago
+
+Withdraw
+Cem Surkultay’s profile picture
+Cem Surkultay
+
+Principal Scientist Drug Substance | CMC Consultant
+
+Sent 51 minutes ago
+
+Withdraw
+Rainer Sigl’s profile picture
+Rainer Sigl
+
+Principal Scientist New Formulations & Technologies bei Formycon AG
+
+Sent 53 minutes ago
+
+Withdraw
+Peter Bußlehner’s profile picture
+Peter Bußlehner
+
+Senior Scientist / Team Lead – Biopharma Analytics & Binding Kinetics
+
+Sent 53 minutes ago
+
+Withdraw
+Lennart Danne’s profile picture
+Lennart Danne
+
+Scientist bei Formycon AG
+
+Sent 54 minutes ago
+
+Withdraw
+Anton Schuster’s profile picture
+Anton Schuster
+
+Scientist bei Formycon AG
+
+Sent 54 minutes ago
+
+Withdraw`;
+
+// Controllable Gemini mock — Gemini is now the ONLY AI provider (OpenAI was removed
+// entirely to eliminate paid-API quota/429 errors). It is opt-in and off by default.
+const geminiGenerate = vi.fn();
+vi.mock("@google/generative-ai", () => ({
+  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
+    getGenerativeModel: () => ({ generateContent: geminiGenerate }),
+  })),
+}));
+
+beforeEach(() => geminiGenerate.mockReset());
 
 // ─── parseLinkedInText — no profile picture lines (real copy-paste) ───────────
 
@@ -274,71 +302,150 @@ describe("parseLinkedInText — edge cases", () => {
 
 describe("parsePendingRequests", () => {
   it("uses text parser — no API keys needed", async () => {
-    const result = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const result = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(result.requests).toHaveLength(2);
     expect(result.success).toBe(true);
   });
 
   it("parses first name correctly", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[0].name).toBe("Aliosha Milsztein");
   });
 
   it("parses second name correctly", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[1].name).toBe("Elisabeth Neurauter");
   });
 
   it("parses first headline correctly", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[0].headline).toContain("Personio");
   });
 
   it("parses second headline correctly", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[1].headline).toContain("Snowflake");
   });
 
   it("converts 1 week ago to 7 days", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[0].sentDaysAgo).toBe(7);
   });
 
   it("calculates ISO sentDate in YYYY-MM-DD format", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.requests[0].sentDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("sentDate is approximately 7 days ago", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     const diff = (Date.now() - new Date(r.requests[0].sentDate!).getTime()) / 86400000;
     expect(diff).toBeGreaterThanOrEqual(6);
     expect(diff).toBeLessThan(9);
   });
 
   it("sets success=true when requests are found", async () => {
-    expect((await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "")).success).toBe(true);
+    expect((await parsePendingRequests(FIXTURE_NO_PICTURE_LINES)).success).toBe(true);
   });
 
   it("reports correct parsed count in stats", async () => {
-    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, "", "");
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES);
     expect(r.stats.parsed).toBe(2);
   });
 
-  it("falls back to OpenAI for unstructured text, returns error on invalid JSON", async () => {
-    const { default: OpenAI } = await import("openai");
-    const mockInstance = {
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValueOnce({
-            choices: [{ message: { content: "not valid json {{" } }],
+});
+
+// ─── Zero-cost guarantee: AI is OFF by default ───────────────────────────────
+
+describe("parsePendingRequests — AI fallback is OFF by default (zero cost)", () => {
+  it("default: never calls AI, even when a Gemini key is present", async () => {
+    const r = await parsePendingRequests("totally unstructured, not a linkedin page", {
+      geminiKey: "fake-key",
+    });
+    expect(geminiGenerate).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+    expect(r.errors[0].reason).toMatch(/No pending requests/i);
+  });
+
+  it("structured text never triggers AI even when fallback is enabled", async () => {
+    const r = await parsePendingRequests(FIXTURE_NO_PICTURE_LINES, {
+      geminiKey: "fake-key",
+      allowAiFallback: true,
+    });
+    expect(geminiGenerate).not.toHaveBeenCalled();
+    expect(r.requests).toHaveLength(2);
+  });
+
+  it("allowAiFallback=true but no key → stays pure text, no AI call", async () => {
+    const r = await parsePendingRequests("garbage the parser cannot read", {
+      allowAiFallback: true,
+    });
+    expect(geminiGenerate).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+  });
+
+  it("opt-in Gemini fallback fires only when explicitly enabled", async () => {
+    geminiGenerate.mockResolvedValueOnce({
+      response: {
+        text: () =>
+          JSON.stringify({
+            requests: [{ name: "Recovered Person", headline: "CEO at Acme", sentDaysAgo: 3 }],
           }),
-        },
       },
-    };
-    (OpenAI as ReturnType<typeof vi.fn>).mockImplementationOnce(() => mockInstance);
-    const result = await parsePendingRequests("random unstructured text with no linkedin format", "", "test-key");
-    expect(result.success).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    });
+    const r = await parsePendingRequests("unparseable blob ###", {
+      geminiKey: "fake-key",
+      allowAiFallback: true,
+    });
+    expect(geminiGenerate).toHaveBeenCalledTimes(1);
+    expect(r.requests[0].name).toBe("Recovered Person");
+  });
+
+  it("Gemini failure degrades gracefully to the helpful text message (no API error leaks)", async () => {
+    geminiGenerate.mockRejectedValueOnce(new Error("429 quota exceeded"));
+    const r = await parsePendingRequests("unparseable blob ###", {
+      geminiKey: "fake-key",
+      allowAiFallback: true,
+    });
+    expect(r.success).toBe(false);
+    // The raw "429" string must NOT surface to the user.
+    expect(r.errors[0].reason).toMatch(/No pending requests/i);
+    expect(r.errors[0].reason).not.toMatch(/429|quota/i);
+  });
+});
+
+// ─── Real-world regression: the Formycon paste that previously 429'd ─────────
+
+describe("parseLinkedInText — real Formycon paste (regression)", () => {
+  it("parses all 6 contacts purely, with no AI", () => {
+    const r = parseLinkedInText(FIXTURE_REAL_FORMYCON);
+    expect(r.success).toBe(true);
+    expect(r.requests).toHaveLength(6);
+  });
+
+  it("extracts the names, never the 'profile picture' line", () => {
+    const names = parseLinkedInText(FIXTURE_REAL_FORMYCON).requests.map((x) => x.name);
+    expect(names).toEqual([
+      "Alessia Peduzzo",
+      "Cem Surkultay",
+      "Rainer Sigl",
+      "Peter Bußlehner",
+      "Lennart Danne",
+      "Anton Schuster",
+    ]);
+    expect(names.join(" ")).not.toMatch(/profile picture/i);
+  });
+
+  it("'X minutes ago' resolves to sentDaysAgo = 0 (today)", () => {
+    expect(parseLinkedInText(FIXTURE_REAL_FORMYCON).requests[0].sentDaysAgo).toBe(0);
+  });
+
+  it("end-to-end parsePendingRequests handles it with zero AI calls", async () => {
+    const r = await parsePendingRequests(FIXTURE_REAL_FORMYCON, {
+      geminiKey: "fake-key",
+      allowAiFallback: true,
+    });
+    expect(geminiGenerate).not.toHaveBeenCalled();
+    expect(r.requests).toHaveLength(6);
   });
 });

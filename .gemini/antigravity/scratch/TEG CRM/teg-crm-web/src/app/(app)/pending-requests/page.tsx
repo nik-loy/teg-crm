@@ -30,13 +30,19 @@ export default function PendingRequestsPage() {
   const [duplicates, setDuplicates] = useState<DuplicateInfo[]>([]);
   const [checkingDupes, setCheckingDupes] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState("");
+  const [events, setEvents] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<CreateResult | null>(null);
 
-  // Restore owner from localStorage on mount
+  // Restore owner from localStorage on mount; fetch events registry
   useEffect(() => {
     const saved = localStorage.getItem(OWNER_STORAGE_KEY);
     if (saved) setOwner(saved);
+
+    fetch("/api/events")
+      .then((r) => r.json())
+      .then((d) => setEvents(d.events ?? []))
+      .catch(() => {/* silently fail — user can still type */});
   }, []);
 
   function handleOwnerChange(v: string) {
@@ -175,9 +181,9 @@ export default function PendingRequestsPage() {
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select an event…</option>
-            <option value="AI Consulting Conference 2026">AI Consulting Conference 2026</option>
-            <option value="BioTech Conference 2026">BioTech Conference 2026</option>
-            <option value="other">other</option>
+            {events.map((e) => (
+              <option key={e} value={e}>{e}</option>
+            ))}
           </select>
           {!selectedEvent && (
             <p className="text-xs text-amber-600 mt-2">

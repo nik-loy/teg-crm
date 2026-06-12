@@ -1,5 +1,6 @@
 import eventData from "../../config/event.json";
 import teamData from "../../config/team.json";
+import eventsRegistryData from "../../config/events-registry.json";
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -56,6 +57,16 @@ export interface TeamMember {
 /** Returns the event configuration object. */
 export function getEvent(): EventConfig {
   return eventData as EventConfig;
+}
+
+/**
+ * Returns the list of selectable event names from the central registry.
+ *
+ * To add a new event for the entire CRM, append its name to
+ * `config/events-registry.json`. No code changes required.
+ */
+export function getEventsRegistry(): string[] {
+  return eventsRegistryData as string[];
 }
 
 /** Returns all team members. */

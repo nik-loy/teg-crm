@@ -37,10 +37,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   }
 
+  // Reuse the profile captured at enrich time when the rep doesn't paste one,
+  // so the same clean, repost-free profile drives messaging (no double paste).
+  const effectiveProfile = profileText?.trim() || contact.profileSummary?.trim() || "";
+
   try {
     const result = await generateMessage(
       contact,
-      profileText?.trim() ?? "",
+      effectiveProfile,
       owner?.trim() ?? "",
       geminiKey,
       openaiKey

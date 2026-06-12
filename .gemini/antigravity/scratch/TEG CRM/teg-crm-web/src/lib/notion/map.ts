@@ -53,6 +53,11 @@ export function pageToContact(page: PageObjectResponse): Contact {
     followUpComplete,
     notes: getText(p, "Notes"),
     profileSummary: getText(p, "Profile Summary"),
+    // Additive fields — return "" when the property doesn't exist in the schema.
+    location: getText(p, "Location"),
+    experience: getText(p, "Experience"),
+    education: getText(p, "Education"),
+    personalizationSignals: getText(p, "Personalization Signals"),
     notionUrl: page.url,
     events: events.length > 0 ? events : undefined,
   };

@@ -29,6 +29,10 @@ export interface Contact {
   followUpComplete: boolean;
   notes: string;
   profileSummary?: string;
+  location?: string;
+  experience?: string;
+  education?: string;
+  personalizationSignals?: string;
   notionUrl?: string;
   events?: string[];
 }

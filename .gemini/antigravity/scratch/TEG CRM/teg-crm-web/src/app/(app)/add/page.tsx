@@ -7,36 +7,41 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { OwnerSelect } from "@/components/OwnerSelect";
 import { cn } from "@/lib/utils";
-import { Loader2, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink, CheckCircle2, Circle, UserPlus, Search } from "lucide-react";
 import type { Contact } from "@/lib/types";
+import type { ExtractedProfile } from "@/lib/extraction/types";
+import { toProfileFields } from "@/lib/extraction/summary";
 
 /* ================================================================== */
 /* Types                                                                */
 /* ================================================================== */
+interface Candidate {
+  contact: Contact;
+  score: number;
+  reason: string;
+}
+
+interface PrepareData {
+  profile: ExtractedProfile;
+  inferredName: string;
+  nameConfident: boolean;
+  candidates: Candidate[];
+  confident: boolean;
+}
+
 type SubmitResult =
   | { type: "created"; pageId: string; notionUrl?: string }
   | { type: "merged"; pageId: string }
-  | { type: "updated"; pageId: string }
+  | { type: "updated"; pageId: string; filledFields: string[]; archived: boolean }
   | { type: "existing"; pageId: string }
   | { type: "error"; message: string };
-
-type Mode = "new" | "enrich";
 
 /* ================================================================== */
 /* Field helpers                                                         */
 /* ================================================================== */
-function Label({
-  htmlFor,
-  children,
-}: {
-  htmlFor: string;
-  children: React.ReactNode;
-}) {
+function Label({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      className="block text-sm font-medium text-foreground mb-1"
-    >
+    <label htmlFor={htmlFor} className="block text-sm font-medium text-foreground mb-1">
       {children}
     </label>
   );
@@ -47,23 +52,18 @@ function NativeSelect({
   value,
   onChange,
   children,
-  className,
 }: {
   id: string;
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 appearance-none cursor-pointer",
-        className
-      )}
+      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 appearance-none cursor-pointer"
     >
       {children}
     </select>
@@ -71,7 +71,7 @@ function NativeSelect({
 }
 
 /* ================================================================== */
-/* Result cards                                                          */
+/* Result card                                                           */
 /* ================================================================== */
 function ResultCard({ result }: { result: SubmitResult }) {
   if (result.type === "error") {
@@ -84,21 +84,13 @@ function ResultCard({ result }: { result: SubmitResult }) {
       </Card>
     );
   }
-
   if (result.type === "created") {
     return (
       <Card className="border-green-500/50 bg-green-50/30 dark:bg-green-900/10">
         <CardContent className="pt-4">
-          <p className="text-sm font-semibold text-green-700 dark:text-green-400">
-            Contact added to Notion
-          </p>
+          <p className="text-sm font-semibold text-green-700 dark:text-green-400">Contact added to Notion</p>
           {result.notionUrl && (
-            <a
-              href={result.notionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary underline mt-1"
-            >
+            <a href={result.notionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline mt-1">
               Open in Notion <ExternalLink className="size-3" />
             </a>
           )}
@@ -106,85 +98,113 @@ function ResultCard({ result }: { result: SubmitResult }) {
       </Card>
     );
   }
-
-  if (result.type === "updated") {
+  if (result.type === "updated" || result.type === "merged") {
+    const filled = result.type === "updated" ? result.filledFields : [];
     return (
       <Card className="border-blue-500/50 bg-blue-50/30 dark:bg-blue-900/10">
         <CardContent className="pt-4">
-          <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-            Contact enriched successfully
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Empty fields have been filled in.
-          </p>
+          <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Contact enriched</p>
+          {filled.length > 0 ? (
+            <p className="text-xs text-muted-foreground mt-1">Filled: {filled.join(", ")}.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">All structured fields were already set.</p>
+          )}
+          {result.type === "updated" && result.archived && (
+            <p className="text-xs text-muted-foreground mt-1">Full profile archived to the Notion page.</p>
+          )}
         </CardContent>
       </Card>
     );
   }
-
-  if (result.type === "merged") {
-    return (
-      <Card className="border-blue-500/50 bg-blue-50/30 dark:bg-blue-900/10">
-        <CardContent className="pt-4">
-          <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-            Merged — existing contact enriched
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Empty fields filled in for page {result.pageId.slice(0, 8)}&hellip;
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // existing
   return (
     <Card className="border-amber-500/50 bg-amber-50/30 dark:bg-amber-900/10">
       <CardContent className="pt-4">
-        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-          Already exists
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          This contact is already in Notion (page {result.pageId.slice(0, 8)}&hellip;).
-        </p>
+        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Already exists</p>
+        <p className="text-xs text-muted-foreground mt-1">This contact is already in Notion (page {result.pageId.slice(0, 8)}…).</p>
       </CardContent>
     </Card>
   );
 }
 
 /* ================================================================== */
-/* Inner form — uses useSearchParams, must be wrapped in Suspense       */
+/* Fields-to-fill preview (enrich)                                       */
+/* ================================================================== */
+function FieldsPreview({ profile, contact }: { profile: ExtractedProfile; contact: Contact }) {
+  const f = toProfileFields(profile);
+  const rows: { label: string; incoming: string; existing?: string }[] = [
+    { label: "Job Title", incoming: f.jobTitle, existing: contact.jobTitle },
+    { label: "Location", incoming: f.location, existing: contact.location },
+    { label: "Experience", incoming: profile.experience.length ? `${profile.experience.length} role(s)` : "", existing: contact.experience },
+    { label: "Education", incoming: profile.education.length ? `${profile.education.length} school(s)` : "", existing: contact.education },
+    { label: "Signals", incoming: f.personalizationSignals, existing: contact.personalizationSignals },
+    { label: "Profile Summary", incoming: f.profileSummary ? "full profile" : "", existing: contact.profileSummary },
+  ];
+  const visible = rows.filter((r) => r.incoming);
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground mb-1">Will fill empty fields:</p>
+      {visible.map((r) => {
+        const willFill = !r.existing?.trim();
+        return (
+          <div key={r.label} className="flex items-start gap-2 text-xs">
+            {willFill ? (
+              <Circle className="size-3.5 mt-0.5 text-green-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="size-3.5 mt-0.5 text-muted-foreground shrink-0" />
+            )}
+            <span className={cn("min-w-[5.5rem] font-medium", willFill ? "text-foreground" : "text-muted-foreground line-through")}>
+              {r.label}
+            </span>
+            <span className={cn("flex-1 truncate", willFill ? "text-muted-foreground" : "text-muted-foreground/60")}>
+              {willFill ? r.incoming : "already set — kept"}
+            </span>
+          </div>
+        );
+      })}
+      <p className="text-[11px] text-muted-foreground/70 pt-1">
+        The complete pasted profile is also archived verbatim to the Notion page — nothing is lost.
+      </p>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Main form                                                             */
 /* ================================================================== */
 function AddContactForm() {
   const searchParams = useSearchParams();
   const urlParam = searchParams.get("url") ?? "";
   const nameParam = searchParams.get("name") ?? "";
 
-  const [mode, setMode] = useState<Mode>("new");
-  const [linkedinUrl, setLinkedinUrl] = useState(urlParam);
+  // Paste + prepare
+  const [profileText, setProfileText] = useState("");
+  const [prepState, setPrepState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [prepError, setPrepError] = useState("");
+  const [prep, setPrep] = useState<PrepareData | null>(null);
+
+  // Selection
+  const [selected, setSelected] = useState<Contact | null>(null);
+  // Explicit "create new" path. Opens immediately for the bookmarklet (URL/name
+  // pre-filled), otherwise the paste box drives the flow.
+  const [creating, setCreating] = useState(Boolean(urlParam || nameParam));
+
+  // Create-form fields (pre-filled from extraction)
   const [name, setName] = useState(nameParam);
+  const [linkedinUrl, setLinkedinUrl] = useState(urlParam);
   const [jobTitle, setJobTitle] = useState("");
-  const [company, setCompany] = useState("");
   const [tier, setTier] = useState("");
-  const [status, setStatus] = useState("request_sent");
+  const [status, setStatus] = useState("connected");
   const [owner, setOwner] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
 
-  // Enrichment mode
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [searchQ, setSearchQ] = useState("");
-  const [searchResults, setSearchResults] = useState<Contact[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-
-  const [profileText, setProfileText] = useState("");
-  const [extracting, setExtracting] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
 
-  // Fetch available events on mount
   useEffect(() => {
     async function fetchEvents() {
       try {
@@ -194,7 +214,7 @@ function AddContactForm() {
           setEvents(data.events ?? []);
         }
       } catch {
-        // silently fail
+        /* ignore */
       } finally {
         setLoadingEvents(false);
       }
@@ -202,289 +222,247 @@ function AddContactForm() {
     fetchEvents();
   }, []);
 
-  // sync if URL params change (e.g. navigating via bookmarklet)
-  const initialised = useRef(false);
-  useEffect(() => {
-    if (!initialised.current) {
-      initialised.current = true;
-      return;
-    }
-    setLinkedinUrl(urlParam);
-    setName(nameParam);
-  }, [urlParam, nameParam]);
-
-  // Search contacts for enrichment
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (mode !== "enrich") return;
-
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-
-    if (!searchQ.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setSearchLoading(true);
-    searchDebounce.current = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/contacts/list?q=${encodeURIComponent(searchQ.trim())}`
-        );
-        const data = (await res.json()) as { contacts: Contact[] };
-        setSearchResults(data.contacts);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    };
-  }, [searchQ, mode]);
-
-  /* -------- Profile paste auto-fill -------- */
-  async function handleProfilePaste(text: string) {
+  /* -------- Paste → prepare (debounced) -------- */
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handlePaste(text: string) {
     setProfileText(text);
-    if (!text.trim()) return;
-    setExtracting(true);
+    setResult(null);
+    if (debounce.current) clearTimeout(debounce.current);
+    if (!text.trim() || text.trim().length < 30) {
+      setPrepState("idle");
+      setPrep(null);
+      setSelected(null);
+      setCreating(false);
+      return;
+    }
+    setPrepState("loading");
+    debounce.current = setTimeout(() => runPrepare(text), 600);
+  }
+
+  async function runPrepare(text: string) {
     try {
-      const res = await fetch("/api/extract", {
+      const res = await fetch("/api/enrich/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileText: text }),
       });
-      if (res.status === 501) {
-        // OpenAI key not configured — silently skip
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPrepError(data.error ?? "Could not read the profile.");
+        setPrepState("error");
         return;
       }
-      if (!res.ok) return;
+      const data = (await res.json()) as PrepareData;
+      setPrep(data);
+      setPrepState("ready");
+
+      // Pre-fill create-form fields from the extraction.
+      const f = toProfileFields(data.profile);
+      if (!nameParam) setName(data.inferredName);
+      setJobTitle(f.jobTitle);
+
+      // Auto-select on a confident unique match.
+      if (data.confident && data.candidates[0]) {
+        setSelected(data.candidates[0].contact);
+        setCreating(false);
+      } else {
+        setSelected(null);
+        setCreating(false);
+      }
+    } catch (e) {
+      setPrepError(e instanceof Error ? e.message : "Network error");
+      setPrepState("error");
+    }
+  }
+
+  function chooseCreate() {
+    setCreating(true);
+    setSelected(null);
+    if (prep && !name) setName(prep.inferredName);
+  }
+
+  /* -------- Save: enrich -------- */
+  async function saveEnrich() {
+    if (!selected || !prep) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/contacts/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: prep.profile, rawProfileText: profileText }),
+      });
       const data = await res.json();
-
-      // In new mode: fill empty fields
-      if (mode === "new") {
-        if (data.name && !name) setName(data.name);
-        if (data.current_title && !jobTitle) setJobTitle(data.current_title);
-        if (data.current_company && !company) setCompany(data.current_company);
+      if (!res.ok) {
+        setResult({ type: "error", message: data.error ?? "Request failed" });
+        return;
       }
-      // In enrich mode: already loaded from contact, just update profile text
-    } catch {
-      // network or parse error — gracefully ignore
+      setResult({ type: "updated", pageId: data.pageId, filledFields: data.filledFields ?? [], archived: !!data.archived });
+      resetAll();
+    } catch (e) {
+      setResult({ type: "error", message: e instanceof Error ? e.message : "Network error" });
     } finally {
-      setExtracting(false);
+      setSubmitting(false);
     }
   }
 
-  function selectContactForEnrichment(contact: Contact) {
-    setSelectedContact(contact);
-    setJobTitle(contact.jobTitle || "");
-    setCompany(contact.company || "");
-    setSearchResults([]);
-    setSearchQ("");
+  /* -------- Save: create -------- */
+  async function saveCreate() {
+    if (!name.trim() && !linkedinUrl.trim()) {
+      alert("Please provide a name or LinkedIn URL.");
+      return;
+    }
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: linkedinUrl.trim() || undefined,
+          name: name.trim() || undefined,
+          jobTitle: jobTitle.trim() || undefined,
+          tier: tier || undefined,
+          status,
+          owner: owner.trim() || undefined,
+          events: selectedEvents.length > 0 ? selectedEvents : undefined,
+          profile: prep?.profile,
+          rawProfileText: profileText.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ type: "error", message: data.error ?? "Request failed" });
+        return;
+      }
+      if (data.created) setResult({ type: "created", pageId: data.pageId, notionUrl: data.notionUrl });
+      else if (data.merged) setResult({ type: "merged", pageId: data.pageId });
+      else if (data.existing) setResult({ type: "existing", pageId: data.pageId });
+      else setResult({ type: "error", message: "Unexpected response" });
+      resetAll();
+    } catch (e) {
+      setResult({ type: "error", message: e instanceof Error ? e.message : "Network error" });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  /* -------- Submit -------- */
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (mode === "new") {
-      // New contact flow
-      if (!name.trim() && !linkedinUrl.trim()) {
-        alert(
-          "Please provide either a name or LinkedIn URL so we can identify the contact."
-        );
-        return;
-      }
-
-      setSubmitting(true);
-      setResult(null);
-      try {
-        const res = await fetch("/api/contacts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: linkedinUrl.trim() || undefined,
-            name: name.trim() || undefined,
-            jobTitle: jobTitle.trim() || undefined,
-            company: company.trim() || undefined,
-            tier: tier || undefined,
-            status,
-            owner: owner.trim() || undefined,
-            profileSummary: profileText.trim() || undefined,
-            events: selectedEvents.length > 0 ? selectedEvents : undefined,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setResult({ type: "error", message: data.error ?? "Request failed" });
-          return;
-        }
-
-        if (data.created) {
-          setResult({ type: "created", pageId: data.pageId, notionUrl: data.notionUrl });
-          // Clear form
-          setName("");
-          setLinkedinUrl("");
-          setJobTitle("");
-          setCompany("");
-          setProfileText("");
-        } else if (data.merged) {
-          setResult({ type: "merged", pageId: data.pageId });
-        } else if (data.existing) {
-          setResult({ type: "existing", pageId: data.pageId });
-        } else {
-          setResult({ type: "error", message: "Unexpected response from server" });
-        }
-      } catch (err) {
-        setResult({
-          type: "error",
-          message: err instanceof Error ? err.message : "Network error",
-        });
-      } finally {
-        setSubmitting(false);
-      }
-    } else {
-      // Enrich existing contact flow
-      if (!selectedContact) {
-        alert("Please select a contact to enrich.");
-        return;
-      }
-
-      setSubmitting(true);
-      setResult(null);
-      try {
-        const res = await fetch(`/api/contacts/${selectedContact.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobTitle: jobTitle.trim() || undefined,
-            company: company.trim() || undefined,
-            profileSummary: profileText.trim() || undefined,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setResult({ type: "error", message: data.error ?? "Request failed" });
-          return;
-        }
-
-        if (data.updated) {
-          setResult({ type: "updated", pageId: data.pageId });
-          // Clear form
-          setSelectedContact(null);
-          setJobTitle("");
-          setCompany("");
-          setProfileText("");
-        } else {
-          setResult({
-            type: "error",
-            message: data.message || "No changes to save",
-          });
-        }
-      } catch (err) {
-        setResult({
-          type: "error",
-          message: err instanceof Error ? err.message : "Network error",
-        });
-      } finally {
-        setSubmitting(false);
-      }
-    }
+  function resetAll() {
+    setProfileText("");
+    setPrep(null);
+    setPrepState("idle");
+    setSelected(null);
+    setCreating(false);
+    setName(nameParam);
+    setLinkedinUrl(urlParam);
+    setJobTitle("");
+    setTier("");
+    setSelectedEvents([]);
   }
 
   function toggleEvent(eventName: string) {
     setSelectedEvents((prev) =>
-      prev.includes(eventName)
-        ? prev.filter((e) => e !== eventName)
-        : [...prev, eventName]
+      prev.includes(eventName) ? prev.filter((e) => e !== eventName) : [...prev, eventName]
     );
   }
 
+  const fields = prep ? toProfileFields(prep.profile) : null;
+
   return (
     <div className="p-6 max-w-lg mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Add or Enrich Contact</h1>
-      </div>
+      <h1 className="text-xl font-semibold">Add or Enrich Contact</h1>
 
-      {/* Mode selector */}
-      <div className="flex gap-2">
-        <Button
-          variant={mode === "new" ? "default" : "outline"}
-          onClick={() => {
-            setMode("new");
-            setSelectedContact(null);
-            setSearchQ("");
-            setSearchResults([]);
-          }}
-          className="flex-1"
-        >
-          New Contact
-        </Button>
-        <Button
-          variant={mode === "enrich" ? "default" : "outline"}
-          onClick={() => {
-            setMode("enrich");
-            setName("");
-            setLinkedinUrl("");
-            setTier("");
-            setStatus("request_sent");
-            setOwner("");
-            setSelectedEvents([]);
-          }}
-          className="flex-1"
-        >
-          Enrich Existing
-        </Button>
-      </div>
+      {/* PASTE BOX — the single entry point */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Paste the LinkedIn profile</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <textarea
+            id="profileText"
+            rows={8}
+            autoFocus
+            placeholder="Open the contact's LinkedIn profile, select all (Ctrl+A), copy, and paste here. We'll find the contact and extract their experience, education and more."
+            value={profileText}
+            onChange={(e) => handlePaste(e.target.value)}
+            className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
+          />
+          {prepState === "loading" && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" /> Reading profile &amp; finding the contact…
+            </p>
+          )}
+          {prepState === "error" && (
+            <p className="text-xs text-destructive">{prepError}</p>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* ENRICH EXISTING CONTACT MODE */}
-      {mode === "enrich" && (
+      {/* MATCH RESULT */}
+      {prepState === "ready" && prep && !creating && (
         <Card>
-          <CardHeader>
-            <CardTitle>Find Contact to Enrich</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!selectedContact ? (
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="searchContact">Search contacts</Label>
-                  <Input
-                    id="searchContact"
-                    type="text"
-                    placeholder="Type a name or company…"
-                    value={searchQ}
-                    onChange={(e) => setSearchQ(e.target.value)}
-                    autoFocus
-                  />
+          <CardContent className="pt-4 space-y-3">
+            {selected ? (
+              /* ---- confident / chosen match ---- */
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="size-4 text-green-600" />
+                      <p className="text-sm font-semibold">{selected.name}</p>
+                    </div>
+                    {(selected.jobTitle || selected.company) && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {[selected.jobTitle, selected.company].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                    {prep.candidates[0] && prep.candidates[0].contact.id === selected.id && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {Math.round(prep.candidates[0].score * 100)}% — {prep.candidates[0].reason}
+                      </p>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelected(null)}>
+                    change
+                  </Button>
                 </div>
 
-                {searchLoading && (
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="size-3 animate-spin" />
-                    Searching…
-                  </p>
-                )}
+                <FieldsPreview profile={prep.profile} contact={selected} />
 
-                {searchResults.length > 0 && (
-                  <div className="space-y-2 border rounded-lg p-3 bg-muted/30 max-h-64 overflow-y-auto">
-                    {searchResults.map((contact) => (
+                <Button onClick={saveEnrich} disabled={submitting} className="w-full">
+                  {submitting ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  Save enrichment
+                </Button>
+              </>
+            ) : (
+              /* ---- picker (ambiguous / low-confidence / none) ---- */
+              <>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Search className="size-4 text-muted-foreground" />
+                  <span className="font-medium">
+                    {prep.candidates.length > 0
+                      ? `Is this ${prep.inferredName}?`
+                      : `No existing contact found for “${prep.inferredName}”`}
+                  </span>
+                </div>
+
+                {prep.candidates.length > 0 && (
+                  <div className="space-y-1.5">
+                    {prep.candidates.map((c) => (
                       <button
-                        key={contact.id}
-                        onClick={() => selectContactForEnrichment(contact)}
-                        className="w-full text-left p-2 rounded hover:bg-muted/50 transition-colors"
+                        key={c.contact.id}
+                        onClick={() => setSelected(c.contact)}
+                        className="w-full text-left p-2 rounded-lg border hover:bg-muted/50 transition-colors"
                       >
-                        <p className="text-sm font-medium">{contact.name}</p>
-                        {(contact.jobTitle || contact.company) && (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{c.contact.name}</p>
+                          <span className="text-[11px] text-muted-foreground shrink-0">
+                            {Math.round(c.score * 100)}% · {c.reason}
+                          </span>
+                        </div>
+                        {(c.contact.jobTitle || c.contact.company) && (
                           <p className="text-xs text-muted-foreground">
-                            {[contact.jobTitle, contact.company]
-                              .filter(Boolean)
-                              .join(" · ")}
+                            {[c.contact.jobTitle, c.contact.company].filter(Boolean).join(" · ")}
                           </p>
                         )}
                       </button>
@@ -492,259 +470,105 @@ function AddContactForm() {
                   </div>
                 )}
 
-                {searchQ.trim() && searchResults.length === 0 && !searchLoading && (
-                  <p className="text-xs text-muted-foreground">
-                    No contacts found. Try a different search.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-muted/50 border">
-                  <p className="text-sm font-semibold">{selectedContact.name}</p>
-                  {(selectedContact.jobTitle || selectedContact.company) && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {[selectedContact.jobTitle, selectedContact.company]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedContact(null);
-                      setSearchQ("");
-                      setJobTitle("");
-                      setCompany("");
-                    }}
-                    className="text-xs mt-2"
-                  >
-                    Change selection
-                  </Button>
-                </div>
-
-                {/* Profile paste for enrichment */}
-                <div>
-                  <Label htmlFor="profileText">
-                    Paste LinkedIn profile to enrich
-                  </Label>
-                  <textarea
-                    id="profileText"
-                    rows={8}
-                    placeholder="Paste LinkedIn profile text — missing fields will be automatically filled"
-                    value={profileText}
-                    onChange={(e) => handleProfilePaste(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
-                  />
-                  {extracting && (
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
-                      <Loader2 className="size-3 animate-spin" />
-                      Extracting fields…
-                    </p>
-                  )}
-                </div>
-
-                {/* Job Title & Company */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="jobTitle">Job Title</Label>
-                    <Input
-                      id="jobTitle"
-                      type="text"
-                      placeholder="e.g. Software Engineer"
-                      value={jobTitle}
-                      onChange={(e) => setJobTitle(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="company">Company</Label>
-                    <Input
-                      id="company"
-                      type="text"
-                      placeholder="Company name"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="w-full"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin mr-2" />
-                      Saving…
-                    </>
-                  ) : (
-                    "Save Enrichment"
-                  )}
+                <Button variant="outline" onClick={chooseCreate} className="w-full">
+                  <UserPlus className="size-4 mr-2" />
+                  Create new contact{prep.inferredName ? ` — ${prep.inferredName}` : ""}
                 </Button>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* NEW CONTACT MODE */}
-      {mode === "new" && (
+      {/* CREATE NEW FORM */}
+      {creating && (
         <Card>
-          <CardHeader>
-            <CardTitle>New LinkedIn Contact</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">New contact</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Profile paste — now prominent and first */}
+          <CardContent className="space-y-4">
+            {fields && (
+              <p className="text-xs text-muted-foreground">
+                Extracted: {prep?.profile.experience.length ?? 0} role(s), {prep?.profile.education.length ?? 0} school(s)
+                {fields.location ? ` · ${fields.location}` : ""} — all saved with the contact.
+              </p>
+            )}
+            <div>
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+            </div>
+            <div>
+              <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
+              <Input id="linkedinUrl" type="url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/username" />
+            </div>
+            <div>
+              <Label htmlFor="jobTitle">Job Title</Label>
+              <Input id="jobTitle" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Software Engineer" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="profileText">LinkedIn Profile Text</Label>
-                <textarea
-                  id="profileText"
-                  rows={10}
-                  placeholder="Paste the full LinkedIn page text here — name, title, company and more will be auto-filled"
-                  value={profileText}
-                  onChange={(e) => handleProfilePaste(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 resize-y"
-                />
-                {extracting && (
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
-                    <Loader2 className="size-3 animate-spin" />
-                    Extracting fields…
-                  </p>
-                )}
+                <Label htmlFor="tier">Tier</Label>
+                <NativeSelect id="tier" value={tier} onChange={setTier}>
+                  <option value="">— none —</option>
+                  <option value="Tier 1">Tier 1</option>
+                  <option value="Tier 2">Tier 2</option>
+                  <option value="Tier 3">Tier 3</option>
+                </NativeSelect>
               </div>
-
-              {/* LinkedIn URL */}
               <div>
-                <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
-                <Input
-                  id="linkedinUrl"
-                  type="url"
-                  placeholder="https://linkedin.com/in/username"
-                  value={linkedinUrl}
-                  onChange={(e) => setLinkedinUrl(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Name will be extracted from URL or profile text if not provided
-                </p>
+                <Label htmlFor="status">Status</Label>
+                <NativeSelect id="status" value={status} onChange={setStatus}>
+                  <option value="request_sent">Request Sent</option>
+                  <option value="connected">Connected</option>
+                </NativeSelect>
               </div>
-
-              {/* Name */}
+            </div>
+            <div>
+              <Label htmlFor="owner">Outreach Owner</Label>
+              <OwnerSelect value={owner} onChange={setOwner} />
+            </div>
+            {!loadingEvents && events.length > 0 && (
               <div>
-                <Label htmlFor="name">
-                  Name{" "}
-                  <span className="text-muted-foreground text-xs font-normal">
-                    (auto-filled from URL or profile)
-                  </span>
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Full name (optional if URL provided)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-
-              {/* Job Title */}
-              <div>
-                <Label htmlFor="jobTitle">Job Title</Label>
-                <Input
-                  id="jobTitle"
-                  type="text"
-                  placeholder="e.g. Software Engineer"
-                  value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
-                />
-              </div>
-
-              {/* Company */}
-              <div>
-                <Label htmlFor="company">Company</Label>
-                <Input
-                  id="company"
-                  type="text"
-                  placeholder="Company name"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                />
-              </div>
-
-              {/* Tier + Status (side by side) */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="tier">Tier</Label>
-                  <NativeSelect id="tier" value={tier} onChange={setTier}>
-                    <option value="">— none —</option>
-                    <option value="Tier 1">Tier 1</option>
-                    <option value="Tier 2">Tier 2</option>
-                    <option value="Tier 3">Tier 3</option>
-                  </NativeSelect>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <NativeSelect id="status" value={status} onChange={setStatus}>
-                    <option value="request_sent">Request Sent</option>
-                    <option value="connected">Connected</option>
-                  </NativeSelect>
+                <Label htmlFor="events">Invite to event(s)</Label>
+                <div className="space-y-2 mt-2">
+                  {events.map((eventName) => (
+                    <label key={eventName} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={selectedEvents.includes(eventName)} onChange={() => toggleEvent(eventName)} className="rounded border-input w-4 h-4" />
+                      <span className="text-sm text-foreground">{eventName}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-
-              {/* Owner dropdown */}
-              <div>
-                <Label htmlFor="owner">Outreach Owner</Label>
-                <OwnerSelect value={owner} onChange={setOwner} />
-              </div>
-
-              {/* Events checkboxes */}
-              {!loadingEvents && events.length > 0 && (
-                <div>
-                  <Label htmlFor="events">Invite to event(s)</Label>
-                  <div className="space-y-2 mt-2">
-                    {events.map((eventName) => (
-                      <label
-                        key={eventName}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedEvents.includes(eventName)}
-                          onChange={() => toggleEvent(eventName)}
-                          className="rounded border-input w-4 h-4"
-                        />
-                        <span className="text-sm text-foreground">{eventName}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+            )}
+            <div className="flex gap-2">
+              {prep && (
+                <Button variant="ghost" onClick={() => setCreating(false)} className="text-sm">
+                  Back
+                </Button>
               )}
-
-              {/* Submit */}
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin mr-2" />
-                    Saving…
-                  </>
-                ) : (
-                  "Add to Notion"
-                )}
+              <Button onClick={saveCreate} disabled={submitting} className="flex-1">
+                {submitting ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                Add to Notion
               </Button>
-            </form>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Result feedback */}
+      {/* Manual fallback when nothing has been pasted yet */}
+      {prepState === "idle" && !creating && (
+        <button onClick={chooseCreate} className="text-xs text-muted-foreground underline w-full text-center">
+          or enter a contact manually
+        </button>
+      )}
+
       {result && <ResultCard result={result} />}
     </div>
   );
 }
 
 /* ================================================================== */
-/* Page export — Suspense wrapper required in Next.js 15                */
+/* Page export — Suspense wrapper required for useSearchParams          */
 /* ================================================================== */
 export default function AddPage() {
   return (

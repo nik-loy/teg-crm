@@ -473,7 +473,7 @@ function MessageInner({ contactId }: { contactId: string }) {
         className="rounded-lg border border-border overflow-hidden"
       >
         <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/40 transition-colors select-none">
-          Paste LinkedIn profile text (for richer personalization)
+          Override saved profile (optional — the enriched profile is used automatically)
         </summary>
         <div className="px-3 pb-3 pt-1 border-t border-border">
           <textarea

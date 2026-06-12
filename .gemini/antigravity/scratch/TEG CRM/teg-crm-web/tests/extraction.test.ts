@@ -11,6 +11,20 @@ describe("buildExtractionPrompt", () => {
     expect(p).toMatch(/do not (invent|hallucinate)/i);
     expect(p).toMatch(/JSON/);
   });
+
+  it("requires COMPLETE experience and education capture (crucial fields)", () => {
+    const p = buildExtractionPrompt();
+    expect(p).toMatch(/EXPERIENCE/);
+    expect(p).toMatch(/EDUCATION/);
+    expect(p).toMatch(/every role/i);
+    expect(p).toMatch(/every school/i);
+  });
+
+  it("instructs lossless capture via other_notes", () => {
+    const p = buildExtractionPrompt();
+    expect(p).toMatch(/lossless/i);
+    expect(p).toMatch(/other_notes/);
+  });
 });
 
 describe("parseExtraction", () => {

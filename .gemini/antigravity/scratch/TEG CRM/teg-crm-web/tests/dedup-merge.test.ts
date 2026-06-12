@@ -10,7 +10,12 @@ vi.mock("../src/lib/notion/client", () => {
 });
 
 import { withRetry } from "../src/lib/notion/client";
-import { findByUrl, findByName, resolveMerge } from "../src/lib/notion/contacts";
+import {
+  findByUrl,
+  findByName,
+  resolveMerge,
+  filterPatchToSchema,
+} from "../src/lib/notion/contacts";
 
 // ------------------------------------------------------------------
 // Helpers
@@ -157,5 +162,51 @@ describe("resolveMerge", () => {
       mockContact({ name: "" })
     );
     expect(patch["Name"]).toBeDefined();
+  });
+
+  it("fills the crucial Experience and Education fields when empty", () => {
+    const patch = resolveMerge(
+      {
+        experience: "AI Architect · CLOUDPILOTS (Jan 2024 – Present)",
+        education: "TUM · M.Sc. (2018 – 2021)",
+      },
+      mockContact({})
+    );
+    expect(patch["Experience"]).toBeDefined();
+    expect(patch["Education"]).toBeDefined();
+  });
+
+  it("fills Profile Summary when empty (gating-bug regression — must not depend on Notes)", () => {
+    // Existing has a Note but an empty Profile Summary → summary must still fill.
+    const patch = resolveMerge(
+      { profileSummary: "HEADLINE: VP Eng" },
+      mockContact({ notes: "some earlier note", profileSummary: "" } as Partial<Parameters<typeof resolveMerge>[1]>)
+    );
+    expect(patch["Profile Summary"]).toBeDefined();
+  });
+
+  it("does not overwrite an existing Profile Summary", () => {
+    const patch = resolveMerge(
+      { profileSummary: "new" },
+      mockContact({ profileSummary: "already here" } as Partial<Parameters<typeof resolveMerge>[1]>)
+    );
+    expect(patch["Profile Summary"]).toBeUndefined();
+  });
+});
+
+describe("filterPatchToSchema", () => {
+  it("keeps properties that exist and drops additive ones that don't", () => {
+    const patch = {
+      "Job Title": { rich_text: [] },
+      "Profile Summary": { rich_text: [] },
+      Experience: { rich_text: [] },
+      Education: { rich_text: [] },
+    };
+    const schema = new Set(["Job Title", "Profile Summary"]); // Experience/Education not added yet
+    const filtered = filterPatchToSchema(patch, schema);
+    expect(filtered["Job Title"]).toBeDefined();
+    expect(filtered["Profile Summary"]).toBeDefined();
+    expect(filtered["Experience"]).toBeUndefined();
+    expect(filtered["Education"]).toBeUndefined();
   });
 });

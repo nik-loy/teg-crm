@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { findByUrl, findByName, resolveMerge, queryAll } from "@/lib/notion/contacts";
+import {
+  findByName,
+  queryAll,
+  resolveMerge,
+  ensureContactSchema,
+  filterPatchToSchema,
+  archiveRawProfile,
+  type MergeInput,
+} from "@/lib/notion/contacts";
 import { notion, withRetry } from "@/lib/notion/client";
 import { title, richText, select, url as propUrl, date, multiSelect } from "@/lib/notion/props";
 import { pageToContact } from "@/lib/notion/map";
 import { extractNameFromLinkedInUrl } from "@/lib/linkedin-utils";
+import { toProfileFields } from "@/lib/extraction/summary";
+import { buildProfileArchiveBlocks } from "@/lib/notion/profile-archive";
+import type { ExtractedProfile } from "@/lib/extraction/types";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
 export function normalizeLinkedInUrl(raw: string): string {
@@ -25,22 +36,22 @@ const STATUS_MAP: Record<string, string> = {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name: providedName, jobTitle, tier, status, owner, notes, profileSummary, company, events } = body;
+  const { name: providedName, jobTitle, tier, status, owner, notes, company, events } = body;
+  const profile: ExtractedProfile | undefined = body.profile;
+  const rawProfileText: string | undefined = body.rawProfileText;
   const rawUrl: string | undefined = body.url;
 
-  // Try to infer name from multiple sources
+  // Structured fields derived from the extraction (if a profile was pasted).
+  const fields = profile ? toProfileFields(profile) : null;
+  const profileSummary: string | undefined = fields?.profileSummary ?? body.profileSummary;
+
+  // Resolve the contact name from multiple sources.
   let name = providedName?.trim() || "";
-
-  if (!name && rawUrl) {
-    // Try to extract from LinkedIn URL
-    name = extractNameFromLinkedInUrl(rawUrl);
-  }
-
+  if (!name && profile?.name) name = profile.name.trim();
+  if (!name && rawUrl) name = extractNameFromLinkedInUrl(rawUrl);
   if (!name) {
     return NextResponse.json(
-      {
-        error: "Cannot determine contact name. Please provide a name, LinkedIn profile URL, or paste LinkedIn profile text."
-      },
+      { error: "Cannot determine contact name. Please provide a name, LinkedIn URL, or paste a profile." },
       { status: 400 }
     );
   }
@@ -49,68 +60,91 @@ export async function POST(req: Request) {
   const linkedinUrl = rawUrl ? normalizeLinkedInUrl(rawUrl) : "";
   const today = new Date().toISOString().split("T")[0];
 
-  // 1. Dedup by URL
-  if (linkedinUrl) {
-    const existingId = await findByUrl(linkedinUrl, dbId);
-    if (existingId) {
-      // Try to enrich empty fields
-      const contacts = await queryAll(dbId, {
-        property: "LinkedIn URL",
-        url: { equals: linkedinUrl },
-      });
-      const existing = contacts[0];
-      if (existing) {
-        const patch = resolveMerge(
-          { name, linkedinUrl, jobTitle, tier },
-          existing
-        );
-        if (Object.keys(patch).length > 0) {
-          await withRetry(() =>
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            notion().pages.update({ page_id: existingId, properties: patch as any })
-          );
-          return NextResponse.json({ merged: true, pageId: existingId });
-        }
+  // Non-destructive incoming patch built from the extraction.
+  const incoming: MergeInput = fields
+    ? {
+        jobTitle: jobTitle?.trim() || fields.jobTitle,
+        company: fields.company,
+        location: fields.location,
+        experience: fields.experience,
+        education: fields.education,
+        personalizationSignals: fields.personalizationSignals,
+        profileSummary: fields.profileSummary,
       }
-      return NextResponse.json({ existing: true, pageId: existingId });
+    : { jobTitle, company, profileSummary };
+
+  // 1. Dedup by URL — enrich the existing contact instead of duplicating.
+  if (linkedinUrl) {
+    const contacts = await queryAll(dbId, { property: "LinkedIn URL", url: { equals: linkedinUrl } });
+    const existing = contacts[0];
+    if (existing) {
+      const patch = resolveMerge({ name, linkedinUrl, tier, ...incoming }, existing);
+      const schema = await ensureContactSchema(dbId);
+      const safePatch = filterPatchToSchema(patch, schema);
+      if (Object.keys(safePatch).length > 0) {
+        await withRetry(() =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          notion().pages.update({ page_id: existing.id, properties: safePatch as any })
+        );
+      }
+      if (rawProfileText?.trim()) {
+        await archiveRawProfile(existing.id, buildProfileArchiveBlocks(rawProfileText, today));
+      }
+      return Object.keys(safePatch).length > 0
+        ? NextResponse.json({ merged: true, pageId: existing.id })
+        : NextResponse.json({ existing: true, pageId: existing.id });
     }
   }
 
-  // 2. Dedup by name (weak — just report, don't merge)
+  // 2. Dedup by name (weak key — report, don't merge).
   const nameMatchId = await findByName(name.trim(), dbId);
   if (nameMatchId) {
     return NextResponse.json({ existing: true, pageId: nameMatchId });
   }
 
-  // 3. Create new contact
-  const props: Record<string, unknown> = {
+  // 3. Create a new contact.
+  const baseProps: Record<string, unknown> = {
     Name: title(name.trim()),
     "Pipeline Stage": select("Awareness"),
     Source: select("LinkedIn"),
     "Last Contact Date": date(today),
     "LinkedIn Outreach Status": select(STATUS_MAP[status ?? ""] ?? "Request Sent"),
   };
-  if (linkedinUrl) props["LinkedIn URL"] = propUrl(linkedinUrl);
-  if (jobTitle) props["Job Title"] = richText(jobTitle);
-  if (tier) props["Tier"] = select(tier);
-  if (owner) props["Outreach Owner"] = richText(owner);
-  if (notes) props["Notes"] = richText(notes);
-  if (profileSummary) props["Profile Summary"] = richText(profileSummary);
-  if (company && !notes) props["Notes"] = richText(`Company: ${company}`);
-  if (events && events.length > 0) props["Events"] = multiSelect(events);
+  if (linkedinUrl) baseProps["LinkedIn URL"] = propUrl(linkedinUrl);
+  if (tier) baseProps["Tier"] = select(tier);
+  if (owner) baseProps["Outreach Owner"] = richText(owner);
+  if (events && events.length > 0) baseProps["Events"] = multiSelect(events);
+
+  // Structured fields (job title, location, experience, education, signals,
+  // summary). Schema-aware: additive properties that don't exist are dropped —
+  // their content still lives in Profile Summary, so nothing is lost.
+  const structured: Record<string, unknown> = {};
+  const jt = incoming.jobTitle;
+  if (jt) structured["Job Title"] = richText(jt);
+  if (incoming.location) structured["Location"] = richText(incoming.location);
+  if (incoming.experience) structured["Experience"] = richText(incoming.experience);
+  if (incoming.education) structured["Education"] = richText(incoming.education);
+  if (incoming.personalizationSignals) structured["Personalization Signals"] = richText(incoming.personalizationSignals);
+  if (profileSummary) structured["Profile Summary"] = richText(profileSummary);
+  // Company (and any manual note) → Notes.
+  const noteText = notes || (incoming.company ? `Company: ${incoming.company}` : "");
+  if (noteText) structured["Notes"] = richText(noteText);
+
+  const schema = await ensureContactSchema(dbId);
+  Object.assign(baseProps, filterPatchToSchema(structured, schema));
 
   const page = await withRetry(() =>
     notion().pages.create({
       parent: { database_id: dbId },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      properties: props as any,
+      properties: baseProps as any,
     })
   );
 
+  if (rawProfileText?.trim()) {
+    await archiveRawProfile(page.id, buildProfileArchiveBlocks(rawProfileText, today));
+  }
+
   const contact = pageToContact(page as PageObjectResponse);
-  return NextResponse.json({
-    created: true,
-    pageId: page.id,
-    notionUrl: contact.notionUrl,
-  });
+  return NextResponse.json({ created: true, pageId: page.id, notionUrl: contact.notionUrl });
 }

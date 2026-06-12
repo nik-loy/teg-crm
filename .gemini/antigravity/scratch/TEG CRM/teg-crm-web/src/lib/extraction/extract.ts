@@ -24,6 +24,7 @@ export function parseExtraction(raw: string): ExtractedProfile {
     authored_posts: obj.authored_posts ?? [],
     personalization_signals: obj.personalization_signals ?? [],
     about: obj.about ?? "",
+    other_notes: obj.other_notes ?? [],
     excluded_reposts_count: obj.excluded_reposts_count ?? 0,
   };
 }

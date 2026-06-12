@@ -12,5 +12,9 @@ export interface ExtractedProfile {
   authored_posts: Array<{ summary: string; topics: string[] }>;
   personalization_signals: string[];
   about: string;
+  /** Catch-all for any relevant AUTHORED info that fits no dedicated field
+   *  (languages, certifications, awards, volunteering, publications) — ensures
+   *  nothing useful from the paste is dropped. */
+  other_notes: string[];
   excluded_reposts_count: number;
 }

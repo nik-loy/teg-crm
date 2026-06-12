@@ -10,33 +10,52 @@ const DE_MONTHS: Record<string, string> = {
 };
 
 /**
- * Returns true for lines like:
- *   "Connected on June 12, 2026"
- *   "Verbunden am 12. Juni 2026"
- *   "Kontakt seit 12. Juni 2026"
+ * Returns true for the per-person "connected on" anchor line, in either
+ * LinkedIn UI language:
+ *   EN: "Connected on June 12, 2026"
+ *   DE: "Am 12. Juni 2026 vernetzt"   ← current German LinkedIn phrasing
+ *   DE: "Verbunden am 12. Juni 2026" / "Kontakt seit 12. Juni 2026"  ← older variants
  */
 export function isConnectedOnLine(line: string): boolean {
   if (/^Connected on [A-Z][a-z]+ \d{1,2},?\s+\d{4}$/i.test(line)) return true;
+  if (/^Am\s+\d{1,2}\.\s+\S+\s+\d{4}\s+vernetzt$/i.test(line)) return true;
   if (/^(Verbunden am|Kontakt seit)\s+\d{1,2}\.\s+\S+\s+\d{4}/i.test(line)) return true;
   return false;
+}
+
+/**
+ * Format a Date as "YYYY-MM-DD" using its LOCAL calendar components.
+ * Never use `.toISOString()` here: a date-only value parsed as local midnight
+ * shifts to the previous day in UTC for any positive-offset timezone (the whole
+ * Munich team is UTC+2 in summer), which would save every connection one day early.
+ */
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function parseConnectedOnDate(line: string): string {
   const engMatch = line.match(/Connected on (.+)$/i);
   if (engMatch) {
     const parsed = new Date(engMatch[1]);
-    if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
+    if (!isNaN(parsed.getTime())) return formatLocalDate(parsed);
   }
-  const deMatch = line.match(/(?:Verbunden am|Kontakt seit)\s+(\d{1,2})\.\s+(\S+)\s+(\d{4})/i);
+  // German — pull day / month-name / year from any supported phrasing:
+  //   "Am 12. Juni 2026 vernetzt" · "Verbunden am 12. Juni 2026" · "Kontakt seit 12. Juni 2026"
+  const deMatch =
+    line.match(/^Am\s+(\d{1,2})\.\s+(\S+)\s+(\d{4})\s+vernetzt/i) ??
+    line.match(/(?:Verbunden am|Kontakt seit)\s+(\d{1,2})\.\s+(\S+)\s+(\d{4})/i);
   if (deMatch) {
     const [, day, monthDe, year] = deMatch;
     const monthEn = DE_MONTHS[monthDe.toLowerCase()];
     if (monthEn) {
       const parsed = new Date(`${monthEn} ${day}, ${year}`);
-      if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
+      if (!isNaN(parsed.getTime())) return formatLocalDate(parsed);
     }
   }
-  return new Date().toISOString().split("T")[0];
+  return formatLocalDate(new Date());
 }
 
 // ─── Boundary detection ────────────────────────────────────────────────────────
@@ -45,8 +64,9 @@ function isBoundaryLine(line: string): boolean {
   // Action buttons that appear after the "Connected on" line
   if (/^(Message|Nachricht|Follow|Remove|Block|Report|Withdraw|Connect)$/i.test(line)) return true;
   // Profile picture alt-text (EN + DE)
-  if (/profile picture$/i.test(line)) return true;
-  if (/profilbild$/i.test(line)) return true;
+  if (/profile picture$/i.test(line)) return true; // "Max's profile picture"
+  if (/profilbild$/i.test(line)) return true;      // "Max Mustermanns Profilbild" / "… Weberpals' Profilbild"
+  if (/^profilbild von /i.test(line)) return true; // "Profilbild von Max, offen für Jobangebote" (open-to-work)
   return false;
 }
 

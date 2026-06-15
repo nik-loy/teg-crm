@@ -1,0 +1,147 @@
+{
+  "name": "Herausforderungen & Innovationen in Biotech",
+  "date": "3. Juli 2026",
+  "location": "IZB Martinsried, München",
+  "luma_url": "luma.com/teg-qdjm",
+  "intern_companies": [
+    "Tubulis",
+    "Eisbach Bio",
+    "BioM",
+    "Roland Berger",
+    "LMU München",
+    "TUM München"
+  ],
+  "speakers": [
+    {
+      "name": "Dr. Dominik Schumacher",
+      "company": "Tubulis",
+      "title": "CEO & Founder",
+      "focus": "Antibody-Drug Conjugates (ADCs), Biotech-Startup-Skalierung"
+    },
+    {
+      "name": "Prof. Andreas Ladurner",
+      "company": "Eisbach Bio",
+      "title": "CSO & Founder",
+      "focus": "Wirkstoffforschung, Academia → Startup"
+    },
+    {
+      "name": "Dr. med. Ralf Huss",
+      "company": "BioM",
+      "title": "Geschäftsführer",
+      "focus": "Münchner Biotech-Ökosystem, Cluster, Diagnostik"
+    },
+    {
+      "name": "Dr. Thilo Kaltenbach",
+      "company": "Roland Berger",
+      "title": "Senior Partner",
+      "focus": "Strategie, Pharma & Healthcare, Markt"
+    },
+    {
+      "name": "Dr. Christian Stein",
+      "company": "Ascenion",
+      "title": "CEO",
+      "focus": "Tech-Transfer, IP-Verwertung"
+    }
+  ],
+  "agenda": [
+    {"time": "18:00–18:30", "title": "Opening – Begrüßung & Dank an Sponsoren/Speaker"},
+    {"time": "18:30–19:15", "title": "Speaker-Vorstellung – Werdegang, Hürden & Erfolgsgeschichten"},
+    {"time": "19:15–19:30", "title": "Pause (Snacks & Drinks)"},
+    {"time": "19:30–21:00", "title": "Hauptdiskussion: Lab-to-Industry, KI als Katalysator, Deutschland im Umschwung, globale Wettbewerbsfähigkeit"},
+    {"time": "21:00–22:30", "title": "Offenes Networking (Faculty Club)"}
+  ],
+  "risk_tiers": {
+    "Tubulis": "Team-Lead",
+    "Eisbach Bio": "Team-Lead",
+    "BioM": "none",
+    "Roland Berger": "Project Manager",
+    "LMU München": "Professoren",
+    "TUM München": "Professoren"
+  },
+  "personalization_keywords": [
+    "Drug Discovery",
+    "Wirkstoffforschung",
+    "ADCs",
+    "Translational Research",
+    "Lab-to-Market",
+    "KI in der Forschung",
+    "Biotech-Startups",
+    "Scaling",
+    "Tech Transfer",
+    "IP-Verwertung",
+    "Diagnostik",
+    "Molekularbiologie",
+    "Biochemie",
+    "Cell & Gene Therapy",
+    "Personalized Medicine",
+    "Regulatory",
+    "Zulassung",
+    "Biotech Funding",
+    "VC",
+    "Pharma & Healthcare Strategy",
+    "Biotech-Ökosystem",
+    "Cluster"
+  ],
+  "opening_lines": {
+    "du": [
+      "Hey [Name], danke fürs Vernetzen!",
+      "Hi [Name], danke dir fürs Vernetzen!",
+      "Hey [Name], kurze Nachricht nach der Vernetzung:",
+      "Hi [Name], musste bei deinem Profil kurz an unser Event denken:"
+    ],
+    "sie": [
+      "Hallo Herr/Frau [Nachname], danke für die Vernetzung!",
+      "Hallo Herr/Frau [Nachname], kurze Nachricht nach der Vernetzung:",
+      "Hallo Herr/Frau [Nachname], ich musste bei Ihrem Profil kurz an unser Event denken:"
+    ]
+  },
+  "closing_lines": {
+    "du": [
+      "Falls spannend, hier der Link:",
+      "Falls du reinschauen willst:",
+      "Falls das interessant klingt:",
+      "Vielleicht passt es ja:"
+    ],
+    "sie": [
+      "Falls spannend, hier der Link:",
+      "Falls Sie reinschauen möchten:",
+      "Falls das für Sie interessant klingt:",
+      "Vielleicht passt es ja thematisch:"
+    ]
+  },
+  "message_examples": [
+    {
+      "label": "Extern, Du, Drug Discovery",
+      "text": "Hey Lena, danke fürs Vernetzen! Hab gesehen, dass du viel im Bereich Drug Discovery machst. Wir machen am 3.7. im IZB Martinsried einen Biotech-Abend mit Foundern und CEOs aus der Münchner Szene, u.a. von Tubulis und Eisbach Bio, dazu BioM und Roland Berger. Könnte gut zu deinem Fokus passen. Falls spannend: luma.com/teg-qdjm VG [Vorname]"
+    },
+    {
+      "label": "Extern, Sie, KI in der Forschung",
+      "text": "Hallo Frau Sommer, danke für die Vernetzung! Bei Ihrem Fokus auf KI in der Forschung dachte ich an unseren Biotech-Talk am 3.7. in Martinsried. Kleines Format, Speaker u.a. von Tubulis, BioM und Roland Berger – ein Panel widmet sich genau der Frage, ob KI Fundament oder Hype ist. Falls Sie reinschauen möchten: luma.com/teg-qdjm Beste Grüße, [Vorname]"
+    },
+    {
+      "label": "Intern, Du, LMU-Student",
+      "text": "Hi Jonas, danke fürs Vernetzen! Da du an der LMU in der Molekularbiologie unterwegs bist: Wir machen am 3.7. im IZB Martinsried einen Biotech-Talk – auch jemand von der LMU spricht dort, dazu Founder aus der Münchner Szene. Die Speaker-Runde zu Lab-to-Industry könnte gut passen. Falls spannend: luma.com/teg-qdjm VG [Vorname]"
+    },
+    {
+      "label": "Intern, Sie, Roland Berger",
+      "text": "Hallo Herr Weber, danke für die Vernetzung! Da Sie bei Roland Berger im Healthcare-Umfeld arbeiten: Wir machen am 3.7. in Martinsried einen Biotech-Abend – ein Senior Partner aus Ihrem Haus ist als Speaker dabei, dazu Founder aus der Münchner Szene. Könnte thematisch gut passen. Falls Sie reinschauen möchten: luma.com/teg-qdjm Beste Grüße, [Vorname]"
+    }
+  ],
+  "followup_examples": [
+    {
+      "trigger": "Danke für die Info",
+      "response": "Sehr gerne, freut mich. Falls es thematisch passt, vielleicht sieht man sich ja am 3. Juli.",
+      "sie_variant": "Sehr gerne, freut mich. Falls es für Sie thematisch passt, vielleicht sieht man sich ja am 3. Juli."
+    },
+    {
+      "trigger": "Klingt spannend",
+      "response": "Freut mich! Falls du Fragen zum Format hast, schreib mir gerne, sonst findest du alles Wichtige direkt auf der Seite.",
+      "sie_variant": "Freut mich! Falls Sie Fragen zum Format haben, schreiben Sie mir gerne, sonst finden Sie alles Wichtige direkt auf der Seite."
+    },
+    {
+      "trigger": "Schaue ich mir mal an",
+      "response": "Top, sehr gerne. Falls es für dich passt, würde ich mich freuen, dich dort zu sehen.",
+      "sie_variant": "Sehr gerne. Falls es für Sie passt, würde ich mich freuen, Sie dort zu sehen."
+    }
+  ]
+}

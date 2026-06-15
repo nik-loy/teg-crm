@@ -1,0 +1,33 @@
+{
+  "name": "teg-idea-workflow",
+  "engines": {
+    "node": ">=18"
+  },
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "next": "14.2.29",
+    "react": "^18",
+    "react-dom": "^18",
+    "resend": "^4.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.4",
+    "typescript": "^5"
+  }
+}

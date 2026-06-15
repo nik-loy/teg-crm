@@ -1,0 +1,16 @@
+# secrets
+.env
+.env*.local
+
+# build artifacts
+.next/
+.vercel/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# editor / tool state
+.claude/
+.playwright-mcp/
+*.log

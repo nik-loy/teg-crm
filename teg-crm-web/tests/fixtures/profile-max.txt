@@ -1,0 +1,94 @@
+Maximilian Wiese
+AI Solutions Architect @ CLOUDPILOTS | Gemini Enterprise · Agentic AI
+Munich, Bavaria, Germany · 1,247 followers · 500+ connections
+
+Message  Connect  More
+
+Experience
+
+AI Solutions Architect
+CLOUDPILOTS · Full-time
+Jan 2024 – Present · Munich, Germany
+Designing and deploying enterprise-grade Gemini solutions for DACH clients.
+Leading agentic AI pilots that automate document processing and customer service workflows.
+Core stack: Google Cloud, Vertex AI, Gemini Enterprise.
+
+Cloud Consultant
+CLOUDPILOTS · Full-time
+Mar 2022 – Dec 2023 · Munich, Germany
+Delivered Google Workspace and Google Cloud migrations for mid-market clients.
+Held Google Cloud Professional certification throughout tenure.
+
+Working Student – IT Infrastructure
+MAN Truck & Bus · Part-time
+Sep 2020 – Feb 2022 · Munich, Germany
+
+Education
+
+Technical University of Munich (TUM)
+Master of Science – Information Systems
+2018 – 2021
+
+Ludwig Maximilian University of Munich (LMU)
+Bachelor of Science – Business Informatics
+2015 – 2018
+
+Skills
+
+Gemini Enterprise · Vertex AI · Google Cloud Platform · Agentic AI · LLMs · Python ·
+Terraform · Enterprise Architecture · Prompt Engineering · Cloud Migration
+
+Activity
+
+Maximilian Wiese posted this
+1 week ago
+
+Gemini Enterprise is a game changer for document-heavy workflows.
+Last week we went live with a client where Gemini processes 3,000+ invoices per day – fully automated.
+The accuracy rate after fine-tuning: 97.3%. That's production-ready.
+
+Key lessons learned:
+1. Ground your prompts with real examples from the client's own data
+2. Build a human-in-the-loop step for edge cases – trust, but verify
+3. Monitor token costs closely; Gemini 1.5 Pro is powerful but pricing adds up
+
+Happy to share our architecture template DM me.
+
+#GeminiEnterprise #GoogleCloud #AI #DocumentAutomation #CLOUDPILOTS
+
+87 reactions · 23 comments · 6 reposts
+
+---
+
+Maximilian Wiese reposted this
+5 days ago
+
+Google Cloud
+Official Page
+
+Introducing Gemini 2.0: our most capable model yet.
+Built for the agentic era – faster, smarter, multimodal.
+Read the full announcement on our blog.
+
+View company profile
+
+341 reactions · 89 comments
+
+---
+
+Maximilian Wiese posted this
+3 weeks ago
+
+Agentic AI is not just an LLM calling tools – it is a fundamentally different architecture.
+After building 4 agentic systems in production, here is what I've learned:
+
+- State management is the hardest problem (not the model)
+- ReAct loops need hard iteration limits or they go off the rails
+- Your eval framework matters more than your model choice
+- Start with 2-agent systems before going multi-agent
+
+We just published an internal whitepaper on this. I will share a summary next week.
+
+#AgenticAI #LLM #GoogleCloud #EnterpriseAI #CLOUDPILOTS
+
+112 reactions · 41 comments · 14 reposts

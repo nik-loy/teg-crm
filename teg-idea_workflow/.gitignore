@@ -1,0 +1,9 @@
+.env.local
+.env
+node_modules/
+.next/
+.vercel/
+.superpowers/
+*.log
+tsconfig.tsbuildinfo
+package-lock.json

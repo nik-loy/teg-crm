@@ -1,0 +1,117 @@
+{
+  "name": "AI Consulting Conference 2026 (ACC 2026)",
+  "date": "10. Juni 2026",
+  "location": "München",
+  "luma_url": "luma.com/71152vc3?coupon=INVITE26",
+  "intern_companies": [
+    "McKinsey", "Roland Berger", "IBM", "appliedAI", "PwC", "BCG",
+    "Capgemini Invent", "MaibornWolff", "Netlight", "Hogan Lovells",
+    "Munich Re", "LMU München"
+  ],
+  "speakers": [
+    {"name": "Florian Bauer", "company": "McKinsey"},
+    {"name": "Anja Huber", "company": "McKinsey"},
+    {"name": "Marcus Hartmann", "company": "Roland Berger"},
+    {"name": "Tsun-Tao Chan", "company": "Roland Berger"},
+    {"name": "Andrea Martin", "company": "IBM"},
+    {"name": "Dr. Andreas Liebl", "company": "appliedAI"},
+    {"name": "Susanne Schmutzler", "company": "PwC"},
+    {"name": "Daniel Steiner", "company": "PwC"},
+    {"name": "Erik Lenhard", "company": "BCG"},
+    {"name": "Dr. Florian Forst", "company": "Capgemini Invent"},
+    {"name": "Alexander Hofmann", "company": "MaibornWolff"},
+    {"name": "Moritz Tränkner-Tuborgh", "company": "Netlight"},
+    {"name": "Daniel Schober", "company": "Netlight"},
+    {"name": "Dr. Stefan Schuppert", "company": "Hogan Lovells"},
+    {"name": "Dr. Peter Bärnreuther", "company": "Munich Re"},
+    {"name": "Prof. Dr. Anne-Sophie Mayer", "company": "LMU"}
+  ],
+  "agenda": [
+    {"time": "10:00", "title": "Opening Keynotes: KI und die neue Wertschöpfung in der Beratung"},
+    {"time": "10:45", "title": "Hauptpanel: Wer führt die AI-Transformation? Strategieberatung vs. Tech-Consulting vs. interne AI-Teams"},
+    {"time": "11:30", "title": "Real AI Case Study: Vom Pilot zur Wirkung"},
+    {"time": "13:15", "title": "Industry Briefings: Health, Automotive, Mobility, Financial Services"},
+    {"time": "13:15", "title": "Hands-on Workshops: Accenture, Netlight (je ca. 20 Teilnehmer)"},
+    {"time": "15:00", "title": "Fireside Chat: Governance, Haftung & Risiko"},
+    {"time": "15:30", "title": "Panel: Die Zukunft der Beraterkarriere"},
+    {"time": "16:30", "title": "Closing Keynote: Consulting 2030"}
+  ],
+  "risk_tiers": {
+    "McKinsey": "Engagement Manager",
+    "BCG": "Project Leader",
+    "PwC": "Manager",
+    "Roland Berger": "Project Manager",
+    "Capgemini Invent": "Manager",
+    "Netlight": "Senior Consultant",
+    "IBM": "Manager",
+    "Deloitte": "Manager"
+  },
+  "personalization_keywords": [
+    "AI Strategy", "AI Governance", "Data Analytics", "Digital Transformation",
+    "Workforce Transformation", "Automotive", "Digital Health", "Financial Services",
+    "AI Risk", "Enterprise AI", "Tech Consulting", "Robotics", "Data Privacy",
+    "Transformation", "Consulting Skills"
+  ],
+  "opening_lines": {
+    "du": [
+      "Hey [Name], danke fürs Vernetzen!",
+      "Hi [Name], danke dir fürs Vernetzen!",
+      "Hey [Name], kurze Nachricht nach der Vernetzung:",
+      "Hi [Name], musste bei deinem Profil kurz an unser Event denken:"
+    ],
+    "sie": [
+      "Hallo Herr/Frau [Nachname], danke für die Vernetzung!",
+      "Hallo Herr/Frau [Nachname], kurze Nachricht nach der Vernetzung:",
+      "Hallo Herr/Frau [Nachname], ich musste bei Ihrem Profil kurz an unser Event denken:"
+    ]
+  },
+  "closing_lines": {
+    "du": [
+      "Falls spannend, hier der Link:",
+      "Falls du reinschauen willst:",
+      "Falls das interessant klingt:",
+      "Vielleicht passt es ja:"
+    ],
+    "sie": [
+      "Falls spannend, hier der Link:",
+      "Falls Sie reinschauen möchten:",
+      "Falls das für Sie interessant klingt:",
+      "Vielleicht passt es ja thematisch:"
+    ]
+  },
+  "message_examples": [
+    {
+      "label": "Extern, Du, AI Strategy",
+      "text": "Hey Laura, danke fürs Vernetzen! Hab gesehen, dass du viel mit AI Strategy machst. Wir machen am 10.6. in München eine kleine AI-Consulting-Konferenz mit Speakern u.a. von McKinsey, BCG und IBM. Könnte gut zu deinem Fokus passen. Falls spannend: [LINK] VG Finn"
+    },
+    {
+      "label": "Extern, Sie, AI & Data",
+      "text": "Hallo Herr Schmidt, danke für die Vernetzung! Bei Ihrem Fokus auf AI & Data dachte ich direkt an unsere AI Consulting Conference am 10.6. in München. Kleines Format, Speaker u.a. von McKinsey, BCG und IBM. Falls Sie reinschauen möchten: [LINK] Beste Grüße, Finn"
+    },
+    {
+      "label": "Intern, Du, Healthcare AI",
+      "text": "Hi Sarah, danke fürs Vernetzen! Da du dich mit Healthcare AI beschäftigst: Wir machen am 10.6. in München die AI Consulting Conference, u.a. auch mit jemandem von McKinsey. Die Industry Briefings könnten gut passen. Falls spannend: [LINK] VG Finn"
+    },
+    {
+      "label": "Intern, Sie, Manager-Level",
+      "text": "Hallo Frau Müller, danke für die Vernetzung! Da Sie bei PwC im Transformation-Umfeld arbeiten: Wir machen am 10.6. in München eine kleine AI-Consulting-Konferenz, u.a. auch mit PwC, McKinsey und IBM. Könnte thematisch gut passen. Falls Sie reinschauen möchten: [LINK] Beste Grüße, Finn"
+    }
+  ],
+  "followup_examples": [
+    {
+      "trigger": "Danke für die Info",
+      "response": "Sehr gerne, freut mich. Falls es thematisch passt, vielleicht sieht man sich ja am 10. Juni.",
+      "sie_variant": "Sehr gerne, freut mich. Falls es für Sie thematisch passt, vielleicht sieht man sich ja am 10. Juni."
+    },
+    {
+      "trigger": "Klingt spannend",
+      "response": "Freut mich! Falls du Fragen zum Format hast, schreib mir gerne, sonst findest du alles Wichtige direkt auf der Seite.",
+      "sie_variant": "Freut mich! Falls Sie Fragen zum Format haben, schreiben Sie mir gerne, sonst finden Sie alles Wichtige direkt auf der Seite."
+    },
+    {
+      "trigger": "Schaue ich mir mal an",
+      "response": "Top, sehr gerne. Falls es für dich passt, würde ich mich freuen, dich dort zu sehen.",
+      "sie_variant": "Sehr gerne. Falls es für Sie passt, würde ich mich freuen, Sie dort zu sehen."
+    }
+  ]
+}

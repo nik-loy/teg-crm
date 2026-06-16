@@ -1,0 +1,41 @@
+# docker-compose.yml — TEG CRM
+# Works with `podman compose` (uses docker-compose.exe under the hood on Windows).
+#
+# ─── Quick Start ───────────────────────────────────────────────────────────────
+#  1. Copy teg-crm-web/.env.local.example  →  teg-crm-web/.env.local
+#     Fill in your real Notion token, DB IDs, OpenAI key, etc.
+#
+#  2. First run (builds the image):
+#       podman compose up --build -d
+#
+#  3. Open http://localhost:3000  →  enter APP_PASSWORD
+#
+#  4. Stop:
+#       podman compose down
+#
+#  5. After a code change, rebuild:
+#       podman compose up --build -d
+# ───────────────────────────────────────────────────────────────────────────────
+
+services:
+  teg-crm-web:
+    build:
+      context: ./teg-crm-web
+      dockerfile: Dockerfile
+    container_name: teg-crm-web
+    ports:
+      - "3000:3000"
+    env_file:
+      # Real secrets loaded from this file — never committed to git
+      - ./teg-crm-web/.env.local
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

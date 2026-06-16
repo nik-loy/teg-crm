@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEG CRM — Pipeline Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"
+          integrity="sha512-SIMGYRUjwY8+gKg7nn9EItdD8LCADSDfJNutF9TPrvEo86sQmFMh6MyralfIyhADlajSxqc7G0gs7+MwWF/ogQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           background: #f4f5f7; color: #222; }
+    header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem;
+             display: flex; justify-content: space-between; align-items: baseline; }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+    header p  { font-size: 0.8rem; opacity: 0.55; }
+    .kpi-bar { background: #fff; border-bottom: 1px solid #e2e4e9;
+               padding: 1rem 2rem; display: flex; gap: 2.5rem; }
+    .kpi { text-align: center; }
+    .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .kpi-label { font-size: 0.7rem; color: #888; text-transform: uppercase;
+                 letter-spacing: 0.06em; margin-top: 0.25rem; }
+    .kpi-value.danger { color: #e53e3e; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr;
+            gap: 1.25rem; padding: 1.25rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 10px; padding: 1.25rem;
+            box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .card h2 { font-size: 0.85rem; font-weight: 600; color: #555;
+               text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .chart-wrap { position: relative; height: 260px; }
+    @media (max-width: 680px) {
+      .grid { grid-template-columns: 1fr; padding: 1rem; }
+      .kpi-bar { flex-wrap: wrap; gap: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>TEG CRM — Pipeline Dashboard</h1>
+  <p id="gen-at"></p>
+</header>
+
+<div class="kpi-bar">
+  <div class="kpi">
+    <div class="kpi-value" id="kpi-total">—</div>
+    <div class="kpi-label">Total Contacts</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-value danger" id="kpi-overdue">—</div>
+    <div class="kpi-label">Overdue Follow-ups</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Pipeline Stage</h2>
+    <div class="chart-wrap"><canvas id="chartStage"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Contact Tier</h2>
+    <div class="chart-wrap"><canvas id="chartTier"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Source</h2>
+    <div class="chart-wrap"><canvas id="chartSource"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>New Contacts by Month</h2>
+    <div class="chart-wrap"><canvas id="chartMonth"></canvas></div>
+  </div>
+</div>
+
+<script>
+const DATA = {{DASHBOARD_DATA}};
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+document.getElementById('kpi-total').textContent   = DATA.total_contacts;
+document.getElementById('kpi-overdue').textContent = DATA.overdue_count;
+document.getElementById('gen-at').textContent =
+  'Generated ' + new Date(DATA.generated_at).toLocaleString('de-DE');
+
+// ── Colour palette ────────────────────────────────────────────────────────────
+const PALETTE = ['#6366f1','#8b5cf6','#a78bfa','#c4b5fd','#ddd6fe',
+                 '#f472b6','#fb7185','#f97316','#fbbf24','#34d399'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function bar(id, labels, values, color) {
+  new Chart(document.getElementById(id), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: color || PALETTE, borderRadius: 5 }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+    }
+  });
+}
+
+function pie(id, labels, values) {
+  new Chart(document.getElementById(id), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: PALETTE }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }, cutout: '55%' }
+  });
+}
+
+// ── Stage (ordered by pipeline progression) ───────────────────────────────────
+const STAGE_ORDER = ['Awareness','First Attendance','Engaged','Deepening','Activated'];
+const stageLabels = STAGE_ORDER.filter(s => DATA.by_stage[s] != null);
+bar('chartStage', stageLabels, stageLabels.map(s => DATA.by_stage[s]), '#6366f1');
+
+// ── Tier ──────────────────────────────────────────────────────────────────────
+const tierEntries = Object.entries(DATA.by_tier);
+pie('chartTier', tierEntries.map(e => e[0]), tierEntries.map(e => e[1]));
+
+// ── Source (sorted by volume descending) ──────────────────────────────────────
+const srcEntries = Object.entries(DATA.by_source).sort((a,b) => b[1]-a[1]);
+bar('chartSource', srcEntries.map(e => e[0]), srcEntries.map(e => e[1]));
+
+// ── New contacts by month (line) ──────────────────────────────────────────────
+const monthEntries = Object.entries(DATA.new_by_month);
+new Chart(document.getElementById('chartMonth'), {
+  type: 'line',
+  data: {
+    labels: monthEntries.map(e => e[0]),
+    datasets: [{
+      data: monthEntries.map(e => e[1]),
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.08)',
+      fill: true,
+      tension: 0.35,
+      pointRadius: 4,
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+  }
+});
+</script>
+</body>
+</html>

@@ -9,6 +9,12 @@ node_modules/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+
+# Django
+data/
+db.sqlite3
+staticfiles/
 
 # editor / tool state
 .claude/

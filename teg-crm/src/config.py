@@ -29,8 +29,7 @@ class Config:
     team_members: list[TeamMember]
     followup_overdue_days: int
     followup_warning_days: int
-    openai_api_key: str
-    anthropic_api_key: str
+    gemini_api_key: str
     outreach_blacklist: list[str]
     outreach_luma_url: str
 
@@ -78,8 +77,7 @@ class Config:
             team_members=team_members,
             followup_overdue_days=int(os.getenv("FOLLOWUP_OVERDUE_DAYS", "14")),
             followup_warning_days=int(os.getenv("FOLLOWUP_WARNING_DAYS", "7")),
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+            gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
             outreach_blacklist=outreach_blacklist,
             outreach_luma_url=os.getenv("OUTREACH_LUMA_URL", "luma.com/71152vc3?coupon=INVITE26"),
         )

@@ -3,7 +3,7 @@
 #
 # ─── Quick Start ───────────────────────────────────────────────────────────────
 #  1. Copy teg-crm-web/.env.local.example  →  teg-crm-web/.env.local
-#     Fill in your real Notion token, DB IDs, OpenAI key, etc.
+#     Fill in your real Notion token, Gemini key, etc.
 #
 #  2. First run (builds the image):
 #       podman compose up --build -d
@@ -32,6 +32,11 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+    volumes:
+      # Persist SQLite database across container rebuilds and redeployments.
+      # On Hetzner/Coolify this volume lives on the host filesystem and is
+      # NOT deleted when you run `podman compose down` or redeploy.
+      - crm-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
@@ -39,3 +44,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+volumes:
+  crm-data:
+    # Named volume — survives `podman compose down` and image rebuilds.
+    # Only deleted by explicit `podman volume rm crm-data`.

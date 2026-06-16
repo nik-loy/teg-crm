@@ -1,3 +1,43 @@
+[project]
+name = "teg-crm"
+version = "0.1.0"
+description = "TEG CRM — Django backend for contact management, LinkedIn outreach, and event pipeline."
+requires-python = ">=3.11"
+dependencies = [
+    # Django
+    "django>=5.1,<6",
+    "djangorestframework>=3.15,<4",
+
+    # AI
+    "google-genai>=1.0",
+
+    # Notion (kept for migration / legacy scripts)
+    "notion-client>=2.2.0",
+
+    # Email
+    "resend>=0.7.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-django>=4.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+DJANGO_SETTINGS_MODULE = "crm.settings"
+
+[tool.setuptools.packages.find]
+include = ["src*", "crm*", "scripts*"]

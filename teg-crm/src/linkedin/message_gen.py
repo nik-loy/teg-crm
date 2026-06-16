@@ -1,9 +1,7 @@
 """LinkedIn message generator for ACC 2026 outreach.
 
-Two modes:
-  API mode   (ANTHROPIC_API_KEY set): calls Claude, generates personalised German message,
-             prompts for confirmation, then logs Interaction to Notion + updates contact status.
-  Print mode (no API key): formats profile data into a copy-paste block for ChatGPT.
+Uses Google Gemini to generate personalised German messages,
+prompts for confirmation, then logs Interaction to Notion + updates contact status.
 
 Run:
   python -m src.linkedin.message_gen --url https://linkedin.com/in/person [--owner niklas]
@@ -205,18 +203,18 @@ def _call_and_display(
         console.print("[green]✓[/green] Logged to Notion — contact marked Messaged.")
 
 
-def _run_openai_mode(
+def _run_gemini_mode(
     client: Client,
     cfg: Config,
     contact_page_id: str,
     name: str,
     owner: str,
 ) -> None:
-    """Calls OpenAI GPT-4o-mini, shows output, prompts for confirmation, logs to Notion."""
+    """Calls Google Gemini, shows output, prompts for confirmation, logs to Notion."""
     try:
-        import openai
+        from google import genai
     except ImportError:
-        console.print("[red]Error:[/red] openai package not installed. Run: pip install openai")
+        console.print("[red]Error:[/red] google-genai package not installed. Run: pip install google-genai")
         return
 
     profile_data = _prompt_profile_data()
@@ -227,60 +225,26 @@ def _run_openai_mode(
     invite_url = build_invite_url(cfg, owner)
     user_message = f"Name: {name}\n\nProfil-Infos:\n{profile_data}\n\nEinladungslink für diese Nachricht: {invite_url}"
 
-    console.print("\n[dim]Generating message via GPT-4o-mini...[/dim]")
-    ai_client = openai.OpenAI(api_key=cfg.openai_api_key)
-    response = ai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        max_tokens=800,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
+    console.print("\n[dim]Generating message via Gemini...[/dim]")
+    ai_client = genai.Client(api_key=cfg.gemini_api_key)
+    response = ai_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=user_message,
+        config=genai.types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            max_output_tokens=800,
+        ),
     )
-    full_response = response.choices[0].message.content or ""
-    _call_and_display(client, cfg, contact_page_id, full_response)
-
-
-def _run_api_mode(
-    client: Client,
-    cfg: Config,
-    contact_page_id: str,
-    name: str,
-    owner: str,
-) -> None:
-    """Calls Claude Haiku API, shows output, prompts for confirmation, logs to Notion."""
-    try:
-        import anthropic
-    except ImportError:
-        console.print("[red]Error:[/red] anthropic package not installed. Run: pip install anthropic")
-        return
-
-    profile_data = _prompt_profile_data()
-    if not profile_data.strip():
-        console.print("[yellow]No profile data entered. Exiting.[/yellow]")
-        return
-
-    invite_url = build_invite_url(cfg, owner)
-    user_message = f"Name: {name}\n\nProfil-Infos:\n{profile_data}\n\nEinladungslink für diese Nachricht: {invite_url}"
-
-    console.print("\n[dim]Generating message via Claude Haiku...[/dim]")
-    ai_client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
-    response = ai_client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=800,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    full_response = response.content[0].text
+    full_response = response.text or ""
     _call_and_display(client, cfg, contact_page_id, full_response)
 
 
 def _run_print_mode(name: str, owner: str, cfg: Config) -> None:
-    """No API key set — prints a clipboard-ready block for manual ChatGPT/Claude use."""
+    """No API key set — prints a clipboard-ready block for manual use."""
     invite_url = build_invite_url(cfg, owner)
-    console.print("\n[bold yellow]No API key set — clipboard mode[/bold yellow]")
-    console.print("[dim]Set OPENAI_API_KEY (recommended) or ANTHROPIC_API_KEY in .env to enable auto-generation.[/dim]")
-    console.print("\n[dim]Step 1: Open ChatGPT or Claude. Start a new chat.[/dim]")
+    console.print("\n[bold yellow]No GEMINI_API_KEY set — clipboard mode[/bold yellow]")
+    console.print("[dim]Set GEMINI_API_KEY in .env to enable auto-generation.[/dim]")
+    console.print("\n[dim]Step 1: Open AI Studio or ChatGPT. Start a new chat.[/dim]")
     console.print("[dim]Step 2: Paste the SYSTEM_PROMPT constant from src/linkedin/message_gen.py as the system prompt.[/dim]")
     console.print("\n[dim]Step 3: Send this as your first message:[/dim]\n")
     console.print("─" * 60)
@@ -317,10 +281,8 @@ def main() -> None:
         if not Confirm.ask("Continue?"):
             return
 
-    if cfg.openai_api_key:
-        _run_openai_mode(client, cfg, contact_page_id, name, owner)
-    elif cfg.anthropic_api_key:
-        _run_api_mode(client, cfg, contact_page_id, name, owner)
+    if cfg.gemini_api_key:
+        _run_gemini_mode(client, cfg, contact_page_id, name, owner)
     else:
         _run_print_mode(name, owner, cfg)
 

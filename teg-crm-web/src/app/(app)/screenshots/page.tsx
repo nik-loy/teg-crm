@@ -173,7 +173,7 @@ export default function ScreenshotsPage() {
         <h1 className="text-2xl font-semibold">Screenshot Batch</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Drop LinkedIn "Sent Invitations" screenshots to extract contacts.
-          Review and edit before creating Notion records.
+          Review and edit before creating CRM records.
         </p>
       </div>
 
@@ -229,7 +229,7 @@ export default function ScreenshotsPage() {
                 onClick={createContacts}
                 disabled={idleCount === 0}
               >
-                Create {idleCount} contact{idleCount !== 1 ? "s" : ""} in Notion
+                Create {idleCount} contact{idleCount !== 1 ? "s" : ""} in CRM
               </Button>
             )}
           </div>
@@ -262,7 +262,7 @@ export default function ScreenshotsPage() {
                         <p className="text-xs text-destructive mt-0.5 pl-6">{row.errorMsg}</p>
                       )}
                       {row.status === "existing" && (
-                        <p className="text-xs text-amber-600 mt-0.5 pl-6">Already in Notion</p>
+                        <p className="text-xs text-amber-600 mt-0.5 pl-6">Already in CRM</p>
                       )}
                     </td>
                     <td className="px-3 py-1.5">

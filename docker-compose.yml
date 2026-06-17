@@ -18,13 +18,33 @@
 # ───────────────────────────────────────────────────────────────────────────────
 
 services:
+  teg-crm:
+    image: localhost/teg-crm:latest
+    build:
+      context: ./teg-crm
+      dockerfile: Dockerfile
+    container_name: teg-crm
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_DEBUG=True
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,teg-crm
+      - DATA_DIR=/app/data
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - crm-data:/app/data
+    restart: unless-stopped
+
   teg-crm-web:
+    image: localhost/teg-crm-web:latest
     build:
       context: ./teg-crm-web
       dockerfile: Dockerfile
     container_name: teg-crm-web
     ports:
       - "3000:3000"
+    depends_on:
+      - teg-crm
     env_file:
       # Real secrets loaded from this file — never committed to git
       - ./teg-crm-web/.env.local
@@ -32,10 +52,10 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+      - BACKEND_URL=http://10.89.0.1:8000
     volumes:
-      # Persist SQLite database across container rebuilds and redeployments.
-      # On Hetzner/Coolify this volume lives on the host filesystem and is
-      # NOT deleted when you run `podman compose down` or redeploy.
+      # Persist SQLite database / state if needed, sharing the volume mount.
       - crm-data:/app/data
     restart: unless-stopped
     healthcheck:

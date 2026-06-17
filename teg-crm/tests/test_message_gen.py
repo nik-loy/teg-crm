@@ -39,7 +39,7 @@ def test_build_utm_url_uses_owner_source(mock_config):
     from src.config import TeamMember
     mock_config.outreach_luma_url = "luma.com/71152vc3?coupon=INVITE26"
     mock_config.team_members = [
-        TeamMember(notion_id="x", email="finn@teg.de", name="Finn", utm_source="lkdf")
+        TeamMember(email="finn@teg.de", name="Finn", utm_source="lkdf")
     ]
     url = build_invite_url(mock_config, owner="Finn")
     assert url == "luma.com/71152vc3?coupon=INVITE26&utm_source=lkdf"

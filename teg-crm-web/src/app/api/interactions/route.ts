@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { notion, withRetry } from "@/lib/notion/client";
-import { title, richText, select, date, relation } from "@/lib/notion/props";
+import { getBackendUrl } from "@/lib/backend";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -19,36 +17,25 @@ export async function POST(req: Request) {
     );
   }
 
-  const interactionsDb = env.interactionsDb();
+  const backendUrl = getBackendUrl();
   const today = new Date().toISOString().split("T")[0];
 
   try {
-    // 1. Create Interaction page
-    await withRetry(() =>
-      notion().pages.create({
-        parent: { database_id: interactionsDb },
-        properties: {
-          Summary: title(summary.trim()),
-          Contact: relation(contactId.trim()),
-          Date: date(today),
-          Type: select(type ?? "LinkedIn Message"),
-          ...(nextAction?.trim() ? { "Next Action": richText(nextAction.trim()) } : {}),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
-      })
-    );
+    const existingRes = await fetch(`${backendUrl}/api/contacts/${contactId.trim()}/`);
+    if (!existingRes.ok) throw new Error("Contact not found");
+    const existing = await existingRes.json();
 
-    // 2. Set Last Contact Date + flip status to Messaged
-    await withRetry(() =>
-      notion().pages.update({
-        page_id: contactId.trim(),
-        properties: {
-          "Last Contact Date": date(today),
-          "LinkedIn Outreach Status": select("Messaged"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
-      })
-    );
+    const noteLine = `[Interaction: ${type ?? "LinkedIn Message"}] ${summary.trim()} - Next Action: ${nextAction?.trim() || "None"}\n`;
+    
+    await fetch(`${backendUrl}/api/contacts/${contactId.trim()}/`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        last_contact_date: today,
+        outreach_status: "Messaged",
+        notes: (existing.notes || "") + "\n" + noteLine,
+      }),
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

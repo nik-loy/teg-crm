@@ -24,6 +24,11 @@ function LoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          localStorage.setItem("teg_jwt", data.token);
+        }
+
         const raw = searchParams.get("next") ?? "/today";
         const next = raw.startsWith("/") && !/^\/[/\\]/.test(raw) ? raw : "/today";
         router.push(next);

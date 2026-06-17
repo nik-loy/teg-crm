@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { buildExtractionPrompt } from "./prompt";
 import type { ExtractedProfile } from "./types";
 
@@ -48,6 +47,24 @@ async function extractWithGemini(
       model: "gemini-2.0-flash",
       systemInstruction: buildExtractionPrompt(),
       generationConfig: { responseMimeType: "application/json" },
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+      ],
     });
     const response = await model.generateContent(profileText);
     const raw = response.response.text();
@@ -60,36 +77,15 @@ async function extractWithGemini(
   }
 }
 
-async function extractWithOpenAI(
-  profileText: string,
-  apiKey: string
-): Promise<ExtractedProfile> {
-  console.log("[extract/openai] Calling gpt-4o-mini fallback...");
-  const client = new OpenAI({ apiKey });
-  const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: buildExtractionPrompt() },
-      { role: "user", content: profileText },
-    ],
-  });
-  return parseExtraction(resp.choices[0].message.content ?? "");
-}
 
 export async function extractProfile(
   profileText: string,
-  geminiKey: string,
-  openaiKey: string
+  geminiKey: string
 ): Promise<ExtractedProfile> {
   if (geminiKey) {
     const result = await extractWithGemini(profileText, geminiKey);
     if (result !== null) return result;
   }
 
-  if (openaiKey) {
-    return extractWithOpenAI(profileText, openaiKey);
-  }
-
-  throw new Error("No AI provider available — set GEMINI_API_KEY or OPENAI_API_KEY");
+  throw new Error("No AI provider available — set GEMINI_API_KEY");
 }

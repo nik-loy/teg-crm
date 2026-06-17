@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { queryAll } from "@/lib/notion/contacts";
+import { getBackendUrl } from "@/lib/backend";
 
 export async function POST(req: Request) {
   let body: { names?: string[] };
@@ -15,15 +14,42 @@ export async function POST(req: Request) {
     return NextResponse.json({ duplicates: [] });
   }
 
-  try {
-    const dbId = env.contactsDb();
-    // Fetch all contacts once, do in-memory matching — efficient for small CRM DBs
-    const allContacts = await queryAll(dbId);
+  let authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    const cookieHeader = req.headers.get("cookie");
+    const match = cookieHeader?.match(/(?:^|;)\s*teg_jwt\s*=\s*([^;]+)/);
+    if (match) {
+      authHeader = `Bearer ${match[1]}`;
+    }
+  }
+  console.log("[pending-requests/check-duplicates] authHeader:", authHeader ? `${authHeader.substring(0, 20)}...` : "null");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (authHeader) {
+    headers["Authorization"] = authHeader;
+  }
 
-    const nameMap = new Map(
-      allContacts.map((c) => [
+  const backendUrl = getBackendUrl();
+  try {
+    // Fetch all contacts from Django backend
+    const res = await fetch(`${backendUrl}/api/contacts/`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!res.ok) {
+      console.error("[pending-requests/check-duplicates] Backend error:", await res.text());
+      return NextResponse.json({ duplicates: [] });
+    }
+
+    const data = await res.json();
+    const allContacts = Array.isArray(data) ? data : (data.results || []);
+
+    const nameMap = new Map<string, { owner?: string; pageId: string }>(
+      allContacts.map((c: any) => [
         c.name.toLowerCase().trim(),
-        { owner: c.outreachOwner, pageId: c.id },
+        { owner: c.outreach_owner, pageId: String(c.id) },
       ])
     );
 
@@ -41,3 +67,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ duplicates: [] });
   }
 }
+

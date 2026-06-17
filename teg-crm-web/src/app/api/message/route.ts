@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import { env } from "@/lib/env";
-import { notion, withRetry } from "@/lib/notion/client";
-import { pageToContact } from "@/lib/notion/map";
+import { getBackendUrl, djangoToFrontendContact } from "@/lib/backend";
 import { generateMessage } from "@/lib/message/generate";
 
 export async function POST(req: Request) {
   const geminiKey = env.geminiKey();
-  const openaiKey = env.openaiKey();
 
-  if (!geminiKey && !openaiKey) {
+  if (!geminiKey) {
     return NextResponse.json(
-      { error: "No AI provider configured — set GEMINI_API_KEY or OPENAI_API_KEY" },
+      { error: "No AI provider configured — set GEMINI_API_KEY" },
       { status: 501 }
     );
   }
@@ -29,10 +26,11 @@ export async function POST(req: Request) {
 
   let contact;
   try {
-    const page = await withRetry(() =>
-      notion().pages.retrieve({ page_id: contactId.trim() })
-    );
-    contact = pageToContact(page as PageObjectResponse);
+    const backendUrl = getBackendUrl();
+    const res = await fetch(`${backendUrl}/api/contacts/${contactId.trim()}/`);
+    if (!res.ok) throw new Error("Contact not found");
+    const djangoContact = await res.json();
+    contact = djangoToFrontendContact(djangoContact);
   } catch {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   }
@@ -46,8 +44,7 @@ export async function POST(req: Request) {
       contact,
       effectiveProfile,
       owner?.trim() ?? "",
-      geminiKey,
-      openaiKey
+      geminiKey
     );
     return NextResponse.json(result);
   } catch (e) {

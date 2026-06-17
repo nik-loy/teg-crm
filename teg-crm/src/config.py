@@ -8,7 +8,6 @@ from pathlib import Path
 
 @dataclass
 class TeamMember:
-    notion_id: str
     email: str
     name: str
     utm_source: str = ""
@@ -16,14 +15,6 @@ class TeamMember:
 
 @dataclass
 class Config:
-    notion_token: str
-    contacts_db_id: str
-    companies_db_id: str
-    events_db_id: str
-    attendance_db_id: str
-    interactions_db_id: str
-    speakers_db_id: str
-    parent_page_id: str
     resend_api_key: str
     slack_webhook_url: str | None
     team_members: list[TeamMember]
@@ -35,26 +26,16 @@ class Config:
 
     @classmethod
     def from_env(cls, team_json_path: Path | None = None) -> "Config":
-        required = [
-            "NOTION_TOKEN",
-            "NOTION_CONTACTS_DB_ID",
-            "NOTION_COMPANIES_DB_ID",
-            "NOTION_EVENTS_DB_ID",
-            "NOTION_ATTENDANCE_DB_ID",
-            "NOTION_INTERACTIONS_DB_ID",
-            "NOTION_SPEAKERS_DB_ID",
-        ]
-        missing = [k for k in required if not os.getenv(k)]
-        if missing:
-            raise EnvironmentError(f"Missing required env vars: {', '.join(missing)}")
-
         if team_json_path is None:
             team_json_path = Path(__file__).parent.parent / "config" / "team.json"
 
         team_members: list[TeamMember] = []
         if team_json_path.exists():
             raw = json.loads(team_json_path.read_text(encoding="utf-8"))
-            team_members = [TeamMember(**m) for m in raw]
+            for m in raw:
+                # Remove notion_id if present to keep dataclass clean
+                m.pop("notion_id", None)
+                team_members.append(TeamMember(**m))
 
         DEFAULT_BLACKLIST = ["Netlight", "Oliver Wyman", "Accenture"]
         extra_blacklist = [
@@ -64,14 +45,6 @@ class Config:
         outreach_blacklist = DEFAULT_BLACKLIST + extra_blacklist
 
         return cls(
-            notion_token=os.environ["NOTION_TOKEN"],
-            contacts_db_id=os.environ["NOTION_CONTACTS_DB_ID"],
-            companies_db_id=os.environ["NOTION_COMPANIES_DB_ID"],
-            events_db_id=os.environ["NOTION_EVENTS_DB_ID"],
-            attendance_db_id=os.environ["NOTION_ATTENDANCE_DB_ID"],
-            interactions_db_id=os.environ["NOTION_INTERACTIONS_DB_ID"],
-            speakers_db_id=os.environ["NOTION_SPEAKERS_DB_ID"],
-            parent_page_id=os.getenv("NOTION_PARENT_PAGE_ID", ""),
             resend_api_key=os.getenv("RESEND_API_KEY", ""),
             slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL"),
             team_members=team_members,

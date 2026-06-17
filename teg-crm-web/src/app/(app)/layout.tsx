@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck } from "lucide-react";
+import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/screenshots", label: "Screenshots", icon: Camera },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+  { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
 

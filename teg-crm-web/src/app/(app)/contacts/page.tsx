@@ -200,17 +200,6 @@ function ContactDetail({ contact, onClose, onUpdated }: ContactDetailProps) {
             LinkedIn
           </a>
         )}
-        {contact.notionUrl && (
-          <a
-            href={contact.notionUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Notion
-          </a>
-        )}
       </div>
     </div>
   );
@@ -221,6 +210,7 @@ function ContactsInner() {
   const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<Contact | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -250,13 +240,21 @@ function ContactsInner() {
     if (cursor) params.set("cursor", cursor);
 
     try {
+      setError(null);
       const res = await fetch(`/api/contacts/list?${params.toString()}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to load contacts");
+        return;
+      }
       const data = (await res.json()) as {
         contacts: Contact[];
         nextCursor: string | null;
       };
-      setContacts(cursor ? (prev) => [...prev, ...data.contacts] : data.contacts);
+      setContacts(cursor ? (prev) => [...prev, ...data.contacts] : (data.contacts || []));
       setNextCursor(data.nextCursor);
+    } catch (e) {
+      setError("Failed to load contacts");
     } finally {
       setLoading(false);
     }
@@ -375,7 +373,11 @@ function ContactsInner() {
       </div>
 
       {/* Table */}
-      {loading && contacts.length === 0 ? (
+      {error ? (
+        <div className="p-4 rounded-lg bg-red-100 text-red-700 text-sm border border-red-200">
+          <strong>Error:</strong> {error}. Make sure your backend service and SQLite database are configured correctly.
+        </div>
+      ) : loading && contacts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : contacts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No contacts match the current filters.</p>

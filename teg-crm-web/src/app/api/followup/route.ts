@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "@/lib/env";
 import { getEvent } from "@/lib/config";
@@ -26,30 +25,12 @@ async function generateFollowupWithGemini(
   }
 }
 
-async function generateFollowupWithOpenAI(
-  systemPrompt: string,
-  apiKey: string
-): Promise<string> {
-  console.log("[followup/openai] Calling gpt-4o-mini fallback...");
-  const client = new OpenAI({ apiKey });
-  const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_tokens: 200,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: "Generiere die Follow-up Antwort." },
-    ],
-  });
-  return resp.choices[0].message.content?.trim() ?? "";
-}
-
 export async function POST(req: Request) {
   const geminiKey = env.geminiKey();
-  const openaiKey = env.openaiKey();
 
-  if (!geminiKey && !openaiKey) {
+  if (!geminiKey) {
     return NextResponse.json(
-      { error: "No AI provider configured — set GEMINI_API_KEY or OPENAI_API_KEY" },
+      { error: "No AI provider configured — set GEMINI_API_KEY" },
       { status: 501 }
     );
   }
@@ -78,10 +59,6 @@ export async function POST(req: Request) {
 
     if (geminiKey) {
       text = await generateFollowupWithGemini(systemPrompt, geminiKey);
-    }
-
-    if (text === null && openaiKey) {
-      text = await generateFollowupWithOpenAI(systemPrompt, openaiKey);
     }
 
     if (text === null) {

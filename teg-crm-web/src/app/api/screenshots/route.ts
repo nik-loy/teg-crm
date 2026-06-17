@@ -4,11 +4,10 @@ import { extractFromImage } from "@/lib/extraction/screenshot";
 
 export async function POST(req: Request) {
   const geminiKey = env.geminiKey();
-  const openaiKey = env.openaiKey();
 
-  if (!geminiKey && !openaiKey) {
+  if (!geminiKey) {
     return NextResponse.json(
-      { error: "No vision API configured (set GEMINI_API_KEY or OPENAI_API_KEY)" },
+      { error: "No vision API configured (set GEMINI_API_KEY)" },
       { status: 501 }
     );
   }
@@ -35,7 +34,7 @@ export async function POST(req: Request) {
     const results = await Promise.all(
       images.map((b64, idx) => {
         console.log(`[screenshots] Image ${idx + 1}/${images.length}: base64 length ${b64.length}`);
-        return extractFromImage(b64, geminiKey, openaiKey);
+        return extractFromImage(b64, geminiKey);
       })
     );
     const contacts = results.flat();
@@ -51,3 +50,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

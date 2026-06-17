@@ -530,7 +530,7 @@ export default function ConnectionsPage() {
                     {creating ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating contacts in Notion…
+                        Creating contacts in CRM…
                       </>
                     ) : dupeCount > 0 ? (
                       <>
@@ -644,7 +644,7 @@ export default function ConnectionsPage() {
                     {marking ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Marking as Messaged in Notion…
+                        Marking as Messaged in CRM…
                       </>
                     ) : (
                       <>

@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import {
-  findByName,
-  queryAll,
-  resolveMerge,
-  ensureContactSchema,
-  filterPatchToSchema,
-  archiveRawProfile,
-  type MergeInput,
-} from "@/lib/notion/contacts";
-import { notion, withRetry } from "@/lib/notion/client";
-import { title, richText, select, url as propUrl, date, multiSelect, checkbox as checkboxProp } from "@/lib/notion/props";
-import { pageToContact } from "@/lib/notion/map";
+import { getBackendUrl, djangoToFrontendContact } from "@/lib/backend";
 import { extractNameFromLinkedInUrl } from "@/lib/linkedin-utils";
 import { toProfileFields } from "@/lib/extraction/summary";
-import { buildProfileArchiveBlocks } from "@/lib/notion/profile-archive";
 import type { ExtractedProfile } from "@/lib/extraction/types";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { Contact } from "@/lib/types";
 
 export function normalizeLinkedInUrl(raw: string): string {
   try {
@@ -56,113 +43,190 @@ export async function POST(req: Request) {
     );
   }
 
-  const dbId = env.contactsDb();
   const linkedinUrl = rawUrl ? normalizeLinkedInUrl(rawUrl) : "";
   const today = new Date().toISOString().split("T")[0];
+  const backendUrl = getBackendUrl();
 
   // Non-destructive incoming patch built from the extraction.
-  const incoming: MergeInput = fields
+  const incoming: Record<string, any> = fields
     ? {
-        jobTitle: jobTitle?.trim() || fields.jobTitle,
-        company: fields.company,
+        job_title: jobTitle?.trim() || fields.jobTitle,
+        company_name: fields.company,
         location: fields.location,
         experience: fields.experience,
         education: fields.education,
-        personalizationSignals: fields.personalizationSignals,
-        profileSummary: fields.profileSummary,
+        personalization_signals: fields.personalizationSignals,
+        profile_summary: fields.profileSummary,
         about: fields.about,
-        mutualConnections: fields.mutualConnections,
-        openToWork: fields.openToWork,
-        connectionDegree: fields.connectionDegree,
+        mutual_connections: fields.mutualConnections,
+        open_to_work: fields.openToWork,
+        connection_degree: fields.connectionDegree,
         languages: fields.languages,
         organizations: fields.organizations,
         certifications: fields.certifications,
         website: fields.website,
-        keyAchievements: fields.keyAchievements,
+        key_achievements: fields.keyAchievements,
       }
-    : { jobTitle, company, profileSummary };
+    : {
+        job_title: jobTitle,
+        company_name: company,
+        profile_summary: profileSummary,
+      };
 
   // 1. Dedup by URL — enrich the existing contact instead of duplicating.
   if (linkedinUrl) {
-    const contacts = await queryAll(dbId, { property: "LinkedIn URL", url: { equals: linkedinUrl } });
-    const existing = contacts[0];
-    if (existing) {
-      const patch = resolveMerge({ name, linkedinUrl, tier, ...incoming }, existing);
-      const schema = await ensureContactSchema(dbId);
-      const safePatch = filterPatchToSchema(patch, schema);
-      if (Object.keys(safePatch).length > 0) {
-        await withRetry(() =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          notion().pages.update({ page_id: existing.id, properties: safePatch as any })
-        );
+    try {
+      const searchRes = await fetch(`${backendUrl}/api/contacts/?linkedin_url=${encodeURIComponent(linkedinUrl)}`);
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        const results = Array.isArray(searchData) ? searchData : (searchData.results || []);
+        const existingRaw = results[0];
+        if (existingRaw) {
+          const existing = djangoToFrontendContact(existingRaw);
+          const patch: Record<string, any> = {};
+
+          const mergeField = (djangoField: string, incomingValue: any, existingValue: any) => {
+            if (incomingValue !== undefined && incomingValue !== null && incomingValue !== "") {
+              if (!existingValue) {
+                patch[djangoField] = incomingValue;
+              }
+            }
+          };
+
+          mergeField("name", name, existing.name);
+          mergeField("job_title", incoming.job_title, existing.jobTitle);
+          mergeField("company_name", incoming.company_name, existing.company);
+          mergeField("location", incoming.location, existing.location);
+          mergeField("experience", incoming.experience, existing.experience);
+          mergeField("education", incoming.education, existing.education);
+          mergeField("personalization_signals", incoming.personalization_signals, existing.personalizationSignals);
+          mergeField("profile_summary", incoming.profile_summary, existing.profileSummary);
+          mergeField("about", incoming.about, existing.about);
+          mergeField("mutual_connections", incoming.mutual_connections, existing.mutualConnections);
+          if (incoming.open_to_work && !existing.openToWork) {
+            patch["open_to_work"] = true;
+          }
+          mergeField("connection_degree", incoming.connection_degree, existing.connectionDegree);
+          mergeField("languages", incoming.languages, existing.languages);
+          mergeField("organizations", incoming.organizations, existing.organizations);
+          mergeField("certifications", incoming.certifications, existing.certifications);
+          mergeField("website", incoming.website, existing.website);
+          mergeField("key_achievements", incoming.key_achievements, existing.keyAchievements);
+
+          if (tier && !existing.tier) patch["tier"] = tier;
+
+          if (rawProfileText?.trim()) {
+            const archiveHeader = `\n\n--- LinkedIn Profile Archive (${today}) ---\n`;
+            patch["notes"] = (existingRaw.notes || "") + archiveHeader + rawProfileText;
+          }
+
+          if (Object.keys(patch).length > 0) {
+            const updateRes = await fetch(`${backendUrl}/api/contacts/${existing.id}/`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(patch),
+            });
+            if (!updateRes.ok) {
+              console.error("[contacts/post] Merge failed:", await updateRes.text());
+            }
+          }
+
+          return NextResponse.json({ merged: true, pageId: existing.id });
+        }
       }
-      if (rawProfileText?.trim()) {
-        await archiveRawProfile(existing.id, buildProfileArchiveBlocks(rawProfileText, today));
-      }
-      return Object.keys(safePatch).length > 0
-        ? NextResponse.json({ merged: true, pageId: existing.id })
-        : NextResponse.json({ existing: true, pageId: existing.id });
+    } catch (e) {
+      console.error("[contacts/post] Error deduping by URL:", e);
     }
   }
 
   // 2. Dedup by name (weak key — report, don't merge).
-  const nameMatchId = await findByName(name.trim(), dbId);
-  if (nameMatchId) {
-    return NextResponse.json({ existing: true, pageId: nameMatchId });
+  if (name) {
+    try {
+      const nameRes = await fetch(`${backendUrl}/api/contacts/?name=${encodeURIComponent(name.trim())}`);
+      if (nameRes.ok) {
+        const nameData = await nameRes.json();
+        const results = Array.isArray(nameData) ? nameData : (nameData.results || []);
+        const nameMatch = results[0];
+        if (nameMatch) {
+          return NextResponse.json({ existing: true, pageId: String(nameMatch.id) });
+        }
+      }
+    } catch (e) {
+      console.error("[contacts/post] Error deduping by name:", e);
+    }
   }
 
   // 3. Create a new contact.
-  const baseProps: Record<string, unknown> = {
-    Name: title(name.trim()),
-    "Pipeline Stage": select("Awareness"),
-    Source: select("LinkedIn"),
-    "Last Contact Date": date(today),
-    "LinkedIn Outreach Status": select(STATUS_MAP[status ?? ""] ?? "Request Sent"),
+  const payload: Record<string, any> = {
+    name: name.trim(),
+    pipeline_stage: "Awareness",
+    source: "LinkedIn",
+    last_contact_date: today,
+    outreach_status: STATUS_MAP[status ?? ""] ?? "Request Sent",
+    ...incoming,
   };
-  if (linkedinUrl) baseProps["LinkedIn URL"] = propUrl(linkedinUrl);
-  if (tier) baseProps["Tier"] = select(tier);
-  if (owner) baseProps["Outreach Owner"] = richText(owner);
-  if (events && events.length > 0) baseProps["Events"] = multiSelect(events);
 
-  // Structured fields (job title, location, experience, education, signals,
-  // summary). Schema-aware: additive properties that don't exist are dropped —
-  // their content still lives in Profile Summary, so nothing is lost.
-  const structured: Record<string, unknown> = {};
-  const jt = incoming.jobTitle;
-  if (jt) structured["Job Title"] = richText(jt);
-  if (incoming.location) structured["Location"] = richText(incoming.location);
-  if (incoming.experience) structured["Experience"] = richText(incoming.experience);
-  if (incoming.education) structured["Education"] = richText(incoming.education);
-  if (incoming.personalizationSignals) structured["Personalization Signals"] = richText(incoming.personalizationSignals);
-  if (profileSummary) structured["Profile Summary"] = richText(profileSummary);
-  if (incoming.about) structured["About"] = richText(incoming.about);
-  if (incoming.mutualConnections) structured["Mutual Connections"] = richText(incoming.mutualConnections);
-  if (incoming.openToWork) structured["Open to Work"] = checkboxProp(true);
-  if (incoming.connectionDegree) structured["Connection Degree"] = select(incoming.connectionDegree);
-  if (incoming.languages) structured["Languages"] = richText(incoming.languages);
-  if (incoming.organizations) structured["Organizations"] = richText(incoming.organizations);
-  if (incoming.certifications) structured["Certifications"] = richText(incoming.certifications);
-  if (incoming.website) structured["Website"] = propUrl(incoming.website);
-  if (incoming.keyAchievements) structured["Key Achievements"] = richText(incoming.keyAchievements);
-  // Company (and any manual note) → Notes.
-  const noteText = notes || (incoming.company ? `Company: ${incoming.company}` : "");
-  if (noteText) structured["Notes"] = richText(noteText);
-
-  const schema = await ensureContactSchema(dbId);
-  Object.assign(baseProps, filterPatchToSchema(structured, schema));
-
-  const page = await withRetry(() =>
-    notion().pages.create({
-      parent: { database_id: dbId },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      properties: baseProps as any,
-    })
-  );
+  if (linkedinUrl) payload.linkedin_url = linkedinUrl;
+  if (tier) payload.tier = tier;
+  if (owner) payload.outreach_owner = owner;
+  
+  // Note/company mapping
+  const noteText = notes || (incoming.company_name ? `Company: ${incoming.company_name}` : "");
+  if (noteText) payload.notes = noteText;
 
   if (rawProfileText?.trim()) {
-    await archiveRawProfile(page.id, buildProfileArchiveBlocks(rawProfileText, today));
+    const archiveHeader = `\n\n--- LinkedIn Profile Archive (${today}) ---\n`;
+    payload.notes = (payload.notes || "") + archiveHeader + rawProfileText;
   }
 
-  const contact = pageToContact(page as PageObjectResponse);
-  return NextResponse.json({ created: true, pageId: page.id, notionUrl: contact.notionUrl });
+  try {
+    const createRes = await fetch(`${backendUrl}/api/contacts/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      console.error("[contacts/post] Create error:", errText);
+      return NextResponse.json({ error: "Failed to create contact on backend" }, { status: 500 });
+    }
+
+    const newContact = await createRes.json();
+
+    // If there were events associated with the contact creation, let's log the attendance
+    if (events && events.length > 0) {
+      for (const eventName of events) {
+        try {
+          // Find the event by name/slug to link attendance
+          const eventRes = await fetch(`${backendUrl}/api/events/?q=${encodeURIComponent(eventName)}`);
+          if (eventRes.ok) {
+            const eventData = await eventRes.json();
+            const eventResults = Array.isArray(eventData) ? eventData : (eventData.results || []);
+            const matchedEvent = eventResults[0];
+            if (matchedEvent) {
+              await fetch(`${backendUrl}/api/attendances/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contact: newContact.id,
+                  event: matchedEvent.id,
+                  fit_score: 3, // default fit score
+                  fit_reason: "Initial import",
+                }),
+              });
+            }
+          }
+        } catch (err) {
+          console.error("[contacts/post] Error creating attendance:", err);
+        }
+      }
+    }
+
+    return NextResponse.json({ created: true, pageId: String(newContact.id), notionUrl: "" });
+  } catch (e) {
+    console.error("[contacts/post] Create request error:", e);
+    return NextResponse.json({ error: "Failed to create contact" }, { status: 500 });
+  }
 }
+

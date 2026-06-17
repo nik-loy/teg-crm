@@ -1,7 +1,7 @@
 """LinkedIn message generator for ACC 2026 outreach.
 
 Uses Google Gemini to generate personalised German messages,
-prompts for confirmation, then logs Interaction to Notion + updates contact status.
+prompts for confirmation, then logs Interaction to SQLite + updates contact status.
 
 Run:
   python -m src.linkedin.message_gen --url https://linkedin.com/in/person [--owner niklas]
@@ -12,17 +12,21 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 from datetime import date
 
+import django
 from dotenv import load_dotenv
-from notion_client import Client
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Confirm
 
+# Bootstrap Django environment before importing models
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crm.settings")
+django.setup()
+
+from crm.contacts.models import Contact, Interaction, InteractionType
 from src.config import Config
-from src.notion_helpers import rich_text_prop, select_prop, title_prop, with_retry
-from src.linkedin.contact_logger import find_by_linkedin_url, update_contact_status
 
 load_dotenv()
 console = Console()
@@ -46,7 +50,7 @@ Wenn du Informationen zur Person bekommst, machst du immer diese fünf Dinge:
 5. LinkedIn-Nachricht generieren
 
 ## 1. FIT-RATING
-Bewerte streng von 1 bis 5. Eine 5 ist selten.
+Bewerte streng von 1 bis 5. Eine 5 is selten.
 5 = Absoluter Volltreffer: Beratung/Tech, direkter AI-Bezug im Jobtitel, Junior- bis Mid-Level, München/DACH.
 4 = Sehr gut: Beratung/Tech, thematisch nah, aber AI nicht Hauptfokus ODER guter AI-Bezug, aber etwas entfernte Branche.
 3 = Solide: Angrenzende Branche, allgemeiner Tech-, Digital- oder Transformation-Bezug.
@@ -61,7 +65,7 @@ Ohne Bedenken anschreibbar: Business Analyst, Associate, Consultant, Junior Cons
 
 ## 3. TEMPLATE-ENTSCHEIDUNG
 Intern: Person arbeitet bei McKinsey, Roland Berger, IBM, appliedAI, PwC, BCG, Capgemini Invent, MaibornWolff, Netlight, Hogan Lovells, Munich Re, oder LMU München (alle haben bestätigte Speaker). Erwähne beiläufig, dass auch jemand aus deren Haus spricht.
-Extern: Person kommt von einer anderen Firma. Nenne 2-4 starke Firmennamen als Credibility.
+Extern: Person kommt von einer anderen firma. Nenne 2-4 starke Firmennamen als Credibility.
 
 ## 4. DU/SIE-ENTSCHEIDUNG
 Du: Associate, Consultant, Junior Consultant, Business Analyst, Senior Associate, Masterstudierende, Startup-Umfeld, lockerer LinkedIn-Auftritt.
@@ -89,7 +93,7 @@ Florian Bauer (McKinsey), Anja Huber (McKinsey), Marcus Hartmann (Roland Berger)
 PERSONALISIERUNG — Bezüge nutzen: konkreter Jobfokus, konkrete Branche, konkretes Thema aus dem Profil, Bezug zu einer Agenda-Session.
 Schlechte Personalisierung: „mit Ihrem spannenden Profil", „mit Ihrem Background in Consulting", „aufgrund Ihrer Erfahrung".
 
-SIGNATUR: Nur "VG Finn" oder "Viele Grüße, Finn" oder "Beste Grüße, Finn". Kein Titel, kein TEG.
+SIGNATUR: Nur "VG Finn" oder "Viele Grüße, Finn" or "Beste Grüße, Finn". Kein Titel, kein TEG.
 
 WICHTIGE REGELN:
 - Antworte immer auf Deutsch
@@ -158,31 +162,25 @@ def _prompt_profile_data() -> str:
 
 
 def _log_interaction(
-    client: Client,
-    cfg: Config,
-    contact_page_id: str,
+    contact: Contact,
     message: str,
 ) -> None:
-    """Creates an Interaction record in Notion for the sent message."""
-    with_retry(lambda: client.pages.create(
-        parent={"database_id": cfg.interactions_db_id},
-        properties={
-            "Summary": title_prop("LinkedIn outreach message sent"),
-            "Contact": {"relation": [{"id": contact_page_id}]},
-            "Date": {"date": {"start": date.today().isoformat()}},
-            "Type": select_prop("LinkedIn Message"),
-            "Next Action": rich_text_prop("Await response"),
-        },
-    ))
+    """Creates an Interaction record in SQLite for the sent message."""
+    Interaction.objects.create(
+        contact=contact,
+        summary="LinkedIn outreach message sent",
+        interaction_type=InteractionType.LINKEDIN_MESSAGE,
+        date=date.today(),
+        next_action="Await response",
+        notes=message,
+    )
 
 
 def _call_and_display(
-    client: Client,
-    cfg: Config,
-    contact_page_id: str,
+    contact: Contact,
     full_response: str,
 ) -> None:
-    """Shared post-call logic: display response, check fit, confirm, log to Notion."""
+    """Shared post-call logic: display response, check fit, confirm, log to SQLite."""
     console.print("\n" + "─" * 60)
     console.print(full_response)
     console.print("─" * 60 + "\n")
@@ -197,20 +195,20 @@ def _call_and_display(
         console.print("[yellow]Could not parse message from response. Not logging.[/yellow]")
         return
 
-    if Confirm.ask("Log to Notion and mark as Messaged?"):
-        _log_interaction(client, cfg, contact_page_id, message)
-        update_contact_status(client, contact_page_id, "Messaged")
-        console.print("[green]✓[/green] Logged to Notion — contact marked Messaged.")
+    if Confirm.ask("Log to SQLite and mark as Messaged?"):
+        _log_interaction(contact, message)
+        contact.outreach_status = "Messaged"
+        contact.save()
+        console.print("[green]✓[/green] Logged to SQLite — contact marked Messaged.")
 
 
 def _run_gemini_mode(
-    client: Client,
-    cfg: Config,
-    contact_page_id: str,
+    contact: Contact,
     name: str,
     owner: str,
+    cfg: Config,
 ) -> None:
-    """Calls Google Gemini, shows output, prompts for confirmation, logs to Notion."""
+    """Calls Google Gemini, shows output, prompts for confirmation, logs to SQLite."""
     try:
         from google import genai
     except ImportError:
@@ -233,10 +231,28 @@ def _run_gemini_mode(
         config=genai.types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             max_output_tokens=800,
+            safety_settings=[
+                genai.types.SafetySetting(
+                    category=genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                genai.types.SafetySetting(
+                    category=genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                genai.types.SafetySetting(
+                    category=genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+                genai.types.SafetySetting(
+                    category=genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=genai.types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                ),
+            ],
         ),
     )
     full_response = response.text or ""
-    _call_and_display(client, cfg, contact_page_id, full_response)
+    _call_and_display(contact, full_response)
 
 
 def _run_print_mode(name: str, owner: str, cfg: Config) -> None:
@@ -254,24 +270,21 @@ def _run_print_mode(name: str, owner: str, cfg: Config) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate LinkedIn outreach message for TEG CRM")
+    parser = argparse.ArgumentParser(description="Generate LinkedIn outreach message for TEG SQLite CRM")
     parser.add_argument("--url", required=True, help="LinkedIn profile URL of the contact")
     parser.add_argument("--owner", default="", help="Your name (for UTM link and logging)")
     args = parser.parse_args()
 
     cfg = Config.from_env()
-    client = Client(auth=cfg.notion_token)
 
-    contact_page_id = find_by_linkedin_url(client, cfg, args.url)
-    if not contact_page_id:
+    contact = Contact.objects.filter(linkedin_url=args.url).first()
+    if not contact:
         console.print(f"[red]Error:[/red] No contact found for {args.url}")
         console.print("[dim]Run contact_logger first to create the contact.[/dim]")
         return
 
-    contact = with_retry(lambda: client.pages.retrieve(page_id=contact_page_id))
-    name = contact["properties"]["Name"]["title"][0]["text"]["content"]
-    status = (contact["properties"].get("LinkedIn Outreach Status") or {}).get("select") or {}
-    status_name = status.get("name", "unknown")
+    name = contact.name
+    status_name = contact.outreach_status or "unknown"
     owner = args.owner or (cfg.team_members[0].name if cfg.team_members else "Finn")
 
     console.print(f"\n[bold]{name}[/bold]  [dim]({status_name})[/dim]")
@@ -282,7 +295,7 @@ def main() -> None:
             return
 
     if cfg.gemini_api_key:
-        _run_gemini_mode(client, cfg, contact_page_id, name, owner)
+        _run_gemini_mode(contact, name, owner, cfg)
     else:
         _run_print_mode(name, owner, cfg)
 

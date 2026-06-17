@@ -1,13 +1,15 @@
-"""Tests for Apollo CSV → Notion batch importer."""
+"""Tests for Apollo CSV → SQLite batch importer."""
 from __future__ import annotations
 
 import csv
 import io
 import pytest
-from unittest.mock import MagicMock, call, patch
 
+from crm.contacts.models import Contact
+from src.linkedin.apollo_importer import parse_apollo_csv, is_blacklisted, batch_import
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+pytestmark = pytest.mark.django_db
+
 
 def _make_csv(rows: list[dict]) -> str:
     """Builds a CSV string from a list of row dicts."""
@@ -42,10 +44,7 @@ def _row(
     }
 
 
-# ── parse_apollo_csv ───────────────────────────────────────────────────────────
-
 def test_parse_apollo_csv_returns_rows():
-    from src.linkedin.apollo_importer import parse_apollo_csv
     rows = parse_apollo_csv(_make_csv([_row(), _row(first="Ben", last="Müller")]))
     assert len(rows) == 2
     assert rows[0]["name"] == "Anna Schmidt"
@@ -56,92 +55,63 @@ def test_parse_apollo_csv_returns_rows():
 
 
 def test_parse_apollo_csv_skips_rows_without_linkedin():
-    from src.linkedin.apollo_importer import parse_apollo_csv
     rows = parse_apollo_csv(_make_csv([_row(linkedin=""), _row()]))
     assert len(rows) == 1
 
 
 def test_parse_apollo_csv_normalises_linkedin_url():
-    from src.linkedin.apollo_importer import parse_apollo_csv
     rows = parse_apollo_csv(_make_csv([_row(linkedin="https://www.linkedin.com/in/anna-schmidt/")]))
     assert rows[0]["linkedin_url"] == "https://www.linkedin.com/in/anna-schmidt"
 
 
-# ── is_blacklisted ─────────────────────────────────────────────────────────────
-
 def test_is_blacklisted_returns_true_for_exact_match():
-    from src.linkedin.apollo_importer import is_blacklisted
     assert is_blacklisted("Netlight", ["Netlight", "Accenture"]) is True
 
 
 def test_is_blacklisted_case_insensitive():
-    from src.linkedin.apollo_importer import is_blacklisted
     assert is_blacklisted("netlight consulting", ["Netlight"]) is True
 
 
 def test_is_blacklisted_returns_false_for_non_match():
-    from src.linkedin.apollo_importer import is_blacklisted
     assert is_blacklisted("Deloitte", ["Netlight", "Accenture"]) is False
 
 
 def test_is_blacklisted_partial_match():
-    from src.linkedin.apollo_importer import is_blacklisted
     assert is_blacklisted("Oliver Wyman GmbH", ["Oliver Wyman"]) is True
 
 
-# ── batch_import ───────────────────────────────────────────────────────────────
-
-def test_batch_import_creates_contacts(mock_config, mock_notion_client):
-    mock_notion_client.databases.query.return_value = {"results": []}
-    mock_notion_client.pages.create.return_value = {"id": "abc", "url": "https://notion.so/abc"}
-    from src.linkedin.apollo_importer import batch_import
-
+def test_batch_import_creates_contacts(mock_config):
     rows = [
         {"name": "Anna Schmidt", "linkedin_url": "https://linkedin.com/in/anna", "email": "anna@d.de", "company": "Deloitte", "job_title": "Consultant"},
     ]
-    summary = batch_import(mock_notion_client, mock_config, rows, owner="niklas")
+    summary = batch_import(mock_config, rows, owner="niklas")
     assert summary["created"] == 1
     assert summary["skipped_blacklist"] == 0
     assert summary["skipped_existing"] == 0
 
+    c = Contact.objects.filter(linkedin_url="https://linkedin.com/in/anna").first()
+    assert c is not None
+    assert c.name == "Anna Schmidt"
+    assert c.outreach_status == "Request Sent"
+    assert c.outreach_owner == "niklas"
 
-def test_batch_import_skips_blacklisted(mock_config, mock_notion_client):
+
+def test_batch_import_skips_blacklisted(mock_config):
     mock_config.outreach_blacklist = ["Netlight"]
-    from src.linkedin.apollo_importer import batch_import
-
     rows = [
         {"name": "Lars Tränkner", "linkedin_url": "https://linkedin.com/in/lars", "email": "lars@netlight.com", "company": "Netlight", "job_title": "Senior Consultant"},
     ]
-    summary = batch_import(mock_notion_client, mock_config, rows, owner="niklas")
+    summary = batch_import(mock_config, rows, owner="niklas")
     assert summary["created"] == 0
     assert summary["skipped_blacklist"] == 1
-    mock_notion_client.pages.create.assert_not_called()
+    assert not Contact.objects.filter(linkedin_url="https://linkedin.com/in/lars").exists()
 
 
-def test_batch_import_skips_existing_linkedin_url(mock_config, mock_notion_client):
-    mock_notion_client.databases.query.return_value = {
-        "results": [{"id": "existing-page"}],
-        "has_more": False,
-    }
-    from src.linkedin.apollo_importer import batch_import
-
+def test_batch_import_skips_existing_linkedin_url(mock_config):
+    Contact.objects.create(name="Anna Schmidt", linkedin_url="https://linkedin.com/in/anna")
     rows = [
         {"name": "Anna Schmidt", "linkedin_url": "https://linkedin.com/in/anna", "email": "anna@d.de", "company": "Deloitte", "job_title": "Consultant"},
     ]
-    summary = batch_import(mock_notion_client, mock_config, rows, owner="niklas")
+    summary = batch_import(mock_config, rows, owner="niklas")
     assert summary["created"] == 0
     assert summary["skipped_existing"] == 1
-
-
-def test_batch_import_sets_request_sent_status(mock_config, mock_notion_client):
-    mock_notion_client.databases.query.return_value = {"results": [], "has_more": False}
-    mock_notion_client.pages.create.return_value = {"id": "abc", "url": ""}
-    from src.linkedin.apollo_importer import batch_import
-
-    rows = [
-        {"name": "Anna Schmidt", "linkedin_url": "https://linkedin.com/in/anna", "email": "", "company": "Deloitte", "job_title": "Consultant"},
-    ]
-    batch_import(mock_notion_client, mock_config, rows, owner="niklas")
-    call_props = mock_notion_client.pages.create.call_args[1]["properties"]
-    assert call_props["LinkedIn Outreach Status"]["select"]["name"] == "Request Sent"
-    assert call_props["Outreach Owner"]["rich_text"][0]["text"]["content"] == "niklas"

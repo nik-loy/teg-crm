@@ -1,42 +1,43 @@
 """Tests for extended contact_logger — status, owner, accept flags."""
-from unittest.mock import MagicMock, patch
 import pytest
-from src.linkedin.contact_logger import create_contact, find_by_linkedin_url
+from crm.contacts.models import Contact
+from src.linkedin.contact_logger import create_contact, find_by_linkedin_url, update_contact_status
+
+pytestmark = pytest.mark.django_db
 
 
-def test_create_contact_includes_outreach_status(mock_config, mock_notion_client):
-    mock_notion_client.pages.create.return_value = {"id": "abc", "url": "https://notion.so/abc"}
-    from src.linkedin.contact_logger import create_contact
-    create_contact(
-        mock_notion_client,
-        mock_config,
+def test_create_contact_includes_outreach_status():
+    contact = create_contact(
         name="Test User",
         linkedin_url="https://linkedin.com/in/test",
         outreach_status="Request Sent",
         outreach_owner="niklas",
     )
-    call_props = mock_notion_client.pages.create.call_args[1]["properties"]
-    assert call_props["LinkedIn Outreach Status"]["select"]["name"] == "Request Sent"
-    assert call_props["Outreach Owner"]["rich_text"][0]["text"]["content"] == "niklas"
+    assert contact.name == "Test User"
+    assert contact.linkedin_url == "https://linkedin.com/in/test"
+    assert contact.outreach_status == "Request Sent"
+    assert contact.outreach_owner == "niklas"
 
 
-def test_create_contact_no_status_omits_property(mock_config, mock_notion_client):
-    mock_notion_client.pages.create.return_value = {"id": "abc", "url": ""}
-    from src.linkedin.contact_logger import create_contact
-    create_contact(
-        mock_notion_client,
-        mock_config,
+def test_update_contact_status():
+    contact = Contact.objects.create(
         name="Test User",
-        linkedin_url="https://linkedin.com/in/test",
+        linkedin_url="https://linkedin.com/in/test2",
+        outreach_status="Request Sent",
     )
-    call_props = mock_notion_client.pages.create.call_args[1]["properties"]
-    assert "LinkedIn Outreach Status" not in call_props
+    update_contact_status(contact, "Connected")
+    contact.refresh_from_db()
+    assert contact.outreach_status == "Connected"
 
 
-def test_update_contact_status(mock_config, mock_notion_client):
-    mock_notion_client.pages.update.return_value = {}
-    from src.linkedin.contact_logger import update_contact_status
-    update_contact_status(mock_notion_client, "page-id-123", "Connected")
-    mock_notion_client.pages.update.assert_called_once()
-    call_props = mock_notion_client.pages.update.call_args[1]["properties"]
-    assert call_props["LinkedIn Outreach Status"]["select"]["name"] == "Connected"
+def test_find_by_linkedin_url():
+    contact = Contact.objects.create(
+        name="Test User",
+        linkedin_url="https://linkedin.com/in/test3",
+    )
+    found = find_by_linkedin_url("https://linkedin.com/in/test3")
+    assert found is not None
+    assert found.id == contact.id
+
+    not_found = find_by_linkedin_url("https://linkedin.com/in/nonexistent")
+    assert not_found is None

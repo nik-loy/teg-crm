@@ -1,37 +1,31 @@
-"""Apollo.ai CSV → Notion batch importer.
+"""Apollo.ai CSV → SQLite batch importer.
 
-Reads an Apollo export CSV, checks blacklist + dedup, creates Notion contacts.
+Reads an Apollo export CSV, checks blacklist + dedup, creates SQLite contacts.
 
 Run: python -m src.linkedin.apollo_importer --csv apollo_export.csv --owner niklas
-     [--dry-run]  -- print summary without writing to Notion
+     [--dry-run]  -- print summary without writing to SQLite
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import io
-import logging
+import os
 from datetime import date
 from pathlib import Path
 
-from dotenv import load_dotenv
-from notion_client import Client
+import django
 from rich.console import Console
 from rich.table import Table
 
-from src.config import Config
-from src.notion_helpers import (
-    date_prop,
-    rich_text_prop,
-    select_prop,
-    title_prop,
-    url_prop,
-    with_retry,
-)
+# Bootstrap Django environment before importing models
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crm.settings")
+django.setup()
 
-load_dotenv()
+from crm.contacts.models import Contact, OutreachStatus, PipelineStage
+from src.config import Config
+
 console = Console()
-logger = logging.getLogger(__name__)
 
 
 def parse_apollo_csv(csv_text: str) -> list[dict]:
@@ -61,34 +55,13 @@ def is_blacklisted(company: str, blacklist: list[str]) -> bool:
     return any(b.lower() in company_lower for b in blacklist)
 
 
-def _find_by_linkedin(client: Client, cfg: Config, url: str) -> bool:
-    res = with_retry(lambda: client.databases.query(
-        database_id=cfg.contacts_db_id,
-        filter={"property": "LinkedIn URL", "url": {"equals": url}},
-        page_size=1,
-    ))
-    return bool(res.get("results"))
-
-
-def _find_by_email(client: Client, cfg: Config, email: str) -> bool:
-    if not email:
-        return False
-    res = with_retry(lambda: client.databases.query(
-        database_id=cfg.contacts_db_id,
-        filter={"property": "Email", "email": {"equals": email}},
-        page_size=1,
-    ))
-    return bool(res.get("results"))
-
-
 def batch_import(
-    client: Client,
     cfg: Config,
     rows: list[dict],
     owner: str = "",
     dry_run: bool = False,
 ) -> dict[str, int]:
-    """Creates Notion contacts from parsed rows. Returns summary dict."""
+    """Creates contacts from parsed rows. Returns summary dict."""
     summary = {"created": 0, "skipped_blacklist": 0, "skipped_existing": 0}
 
     for row in rows:
@@ -97,13 +70,8 @@ def batch_import(
             summary["skipped_blacklist"] += 1
             continue
 
-        if _find_by_linkedin(client, cfg, row["linkedin_url"]):
+        if Contact.objects.filter(linkedin_url=row["linkedin_url"]).exists():
             console.print(f"[yellow]⊘[/yellow] Exists (LinkedIn): {row['name']}")
-            summary["skipped_existing"] += 1
-            continue
-
-        if row["email"] and _find_by_email(client, cfg, row["email"]):
-            console.print(f"[yellow]⊘[/yellow] Exists (email): {row['name']}")
             summary["skipped_existing"] += 1
             continue
 
@@ -112,24 +80,18 @@ def batch_import(
             summary["created"] += 1
             continue
 
-        props: dict = {
-            "Name": title_prop(row["name"]),
-            "LinkedIn URL": url_prop(row["linkedin_url"]),
-            "Pipeline Stage": select_prop("Awareness"),
-            "Source": select_prop("LinkedIn"),
-            "Tier": select_prop("Tier 3"),
-            "Last Contact Date": date_prop(date.today().isoformat()),
-            "LinkedIn Outreach Status": select_prop("Request Sent"),
-        }
-        if row["job_title"]:
-            props["Job Title"] = rich_text_prop(row["job_title"])
-        if owner:
-            props["Outreach Owner"] = rich_text_prop(owner)
-
-        with_retry(lambda: client.pages.create(
-            parent={"database_id": cfg.contacts_db_id},
-            properties=props,
-        ))
+        Contact.objects.create(
+            name=row["name"],
+            linkedin_url=row["linkedin_url"],
+            job_title=row["job_title"],
+            company_name=row["company"],
+            pipeline_stage=PipelineStage.AWARENESS,
+            source="LinkedIn",
+            tier="Tier 3",
+            last_contact_date=date.today(),
+            outreach_status=OutreachStatus.REQUEST_SENT,
+            outreach_owner=owner,
+        )
         console.print(f"[green]✓[/green] Created: {row['name']} ({row['company']})")
         summary["created"] += 1
 
@@ -137,7 +99,7 @@ def batch_import(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import Apollo CSV export into TEG Notion CRM")
+    parser = argparse.ArgumentParser(description="Import Apollo CSV export into TEG SQLite CRM")
     parser.add_argument("--csv", required=True, help="Path to Apollo CSV export file")
     parser.add_argument("--owner", default="", help="Team member name (logged as Outreach Owner)")
     parser.add_argument("--dry-run", action="store_true", help="Print what would happen without writing")
@@ -153,9 +115,8 @@ def main() -> None:
     console.print(f"[dim]Parsed {len(rows)} rows with LinkedIn URLs from {csv_path.name}[/dim]")
 
     cfg = Config.from_env()
-    client = Client(auth=cfg.notion_token)
 
-    summary = batch_import(client, cfg, rows, owner=args.owner, dry_run=args.dry_run)
+    summary = batch_import(cfg, rows, owner=args.owner, dry_run=args.dry_run)
 
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_row("[bold green]Created[/bold green]", str(summary["created"]))

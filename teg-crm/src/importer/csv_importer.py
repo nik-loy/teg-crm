@@ -1,42 +1,35 @@
 """Event Attendee CSV Importer.
 
-Takes a CSV from event sign-in sheets, deduplicates against existing contacts,
-creates new Notion entries, links them to the event, and sets follow-up dates.
+Takes a CSV from event sign-in sheets, deduplicates against existing SQLite contacts,
+creates new entries, links them to the event, and sets follow-up dates.
 
 CSV columns (header row required):
   name (required), email, phone, linkedin_url, company, job_title, industry,
   tier, tags (pipe-separated e.g. "potential-speaker|alumni-TUM"), notes,
   referred_by, follow_up_due (YYYY-MM-DD), follow_up_owner_email
 
-Run: python -m src.importer.csv_importer --file attendees.csv [--event-id NOTION_PAGE_ID]
+Run: python -m src.importer.csv_importer --file attendees.csv [--event-id SQLITE_EVENT_ID]
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
+import django
 from dotenv import load_dotenv
-from notion_client import Client
 from rich.console import Console
 
+# Bootstrap Django environment before importing models
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crm.settings")
+django.setup()
+
+from crm.contacts.models import Contact, Event, Attendance, PipelineStage
 from src.config import Config
-from src.notion_helpers import (
-    date_prop,
-    email_prop,
-    multi_select_prop,
-    paginated_query,
-    phone_prop,
-    relation_prop,
-    rich_text_prop,
-    select_prop,
-    title_prop,
-    url_prop,
-    with_retry,
-)
 
 load_dotenv()
 console = Console()
@@ -102,172 +95,83 @@ def parse_csv(file_path: Path) -> list[AttendeeRow]:
     return rows
 
 
-def _build_email_index(contacts: list[dict]) -> dict[str, str]:
-    """Maps lowercase email → page_id for existing contacts that have an email set."""
-    index: dict[str, str] = {}
-    for c in contacts:
-        email = c.get("properties", {}).get("Email", {}).get("email") or ""
-        if email:
-            index[email.lower()] = c["id"]
-    return index
-
-
-def _build_name_company_index(contacts: list[dict]) -> dict[tuple[str, str], str]:
-    """Maps (lower_name, company_relation_id) → page_id as a fallback dedup key."""
-    index: dict[tuple[str, str], str] = {}
-    for c in contacts:
-        props = c.get("properties", {})
-        name_parts = props.get("Name", {}).get("title", [])
-        name = "".join(p.get("plain_text", "") for p in name_parts).lower()
-        company_rel = props.get("Company", {}).get("relation", [])
-        company_key = company_rel[0]["id"] if company_rel else ""
-        if name:
-            index[(name, company_key)] = c["id"]
-    return index
-
-
-def _find_or_create_company(client: Client, cfg: Config, company_name: str) -> str | None:
-    """Returns the page ID of the company, creating it if it doesn't already exist."""
-    if not company_name:
-        return None
-    results = with_retry(lambda: client.databases.query(
-        database_id=cfg.companies_db_id,
-        filter={"property": "Company Name", "title": {"equals": company_name}},
-        page_size=1,
-    ))
-    if results["results"]:
-        return results["results"][0]["id"]
-    page = with_retry(lambda: client.pages.create(
-        parent={"database_id": cfg.companies_db_id},
-        properties={"Company Name": title_prop(company_name)},
-    ))
-    return page["id"]
-
-
-def _owner_id_from_email(cfg: Config, email: str) -> str | None:
-    """Returns the Notion user ID for a team member email, or None if not found."""
+def _owner_name_from_email(cfg: Config, email: str) -> str | None:
+    """Returns the team member name for an email, or None if not found."""
     for member in cfg.team_members:
         if member.email.lower() == email.lower():
-            return member.notion_id
+            return member.name
     return None
 
 
-def _build_contact_properties(
-    row: AttendeeRow, company_id: str | None, owner_id: str | None
-) -> dict:
-    props: dict = {
-        "Name": title_prop(row.name),
-        "Pipeline Stage": select_prop(_DEFAULT_STAGE),
-        "Source": select_prop(_DEFAULT_SOURCE),
-        "Tier": select_prop(row.tier),
-        "Last Contact Date": date_prop(date.today().isoformat()),
-    }
-    if row.email:
-        props["Email"] = email_prop(row.email)
-    if row.phone:
-        props["Phone"] = phone_prop(row.phone)
-    if row.linkedin_url:
-        props["LinkedIn URL"] = url_prop(row.linkedin_url)
-    if row.job_title:
-        props["Job Title"] = rich_text_prop(row.job_title)
-    if row.industry:
-        props["Industry"] = select_prop(row.industry)
-    if row.tags:
-        props["Tags"] = multi_select_prop(row.tags)
-    if row.notes:
-        props["Notes"] = rich_text_prop(row.notes)
-    if company_id:
-        props["Company"] = relation_prop([company_id])
-
-    # Follow-up: use explicit date from CSV, else auto-schedule if owner is known
-    if row.follow_up_due:
-        props["Follow-Up Due Date"] = date_prop(row.follow_up_due)
-        props["Follow-Up Complete"] = {"checkbox": False}
-    elif owner_id:
-        auto_due = (date.today() + timedelta(days=_DEFAULT_FOLLOWUP_DAYS)).isoformat()
-        props["Follow-Up Due Date"] = date_prop(auto_due)
-        props["Follow-Up Complete"] = {"checkbox": False}
-    if owner_id:
-        props["Follow-Up Owner"] = {"people": [{"id": owner_id}]}
-
-    return props
-
-
-def _create_attendance_record(
-    client: Client,
-    cfg: Config,
-    contact_id: str,
-    event_id: str,
-    event_name: str,
-    row: AttendeeRow,
-) -> None:
-    props: dict = {
-        "Record": title_prop(f"{row.name} — {event_name}"),
-        "Contact": relation_prop([contact_id]),
-        "Event": relation_prop([event_id]),
-        "Date Attended": date_prop(date.today().isoformat()),
-    }
-    if row.referred_by:
-        props["Referred By"] = rich_text_prop(row.referred_by)
-    if row.notes:
-        props["Notes"] = rich_text_prop(row.notes)
-    with_retry(lambda: client.pages.create(
-        parent={"database_id": cfg.attendance_db_id},
-        properties=props,
-    ))
-
-
 def run_import(
-    client: Client,
     cfg: Config,
     rows: list[AttendeeRow],
     event_id: str | None,
 ) -> ImportResult:
-    """Deduplicates rows against Notion, creates new contacts, links attendance."""
+    """Deduplicates rows against SQLite, creates new contacts, links attendance."""
     result = ImportResult()
 
-    console.print("Loading existing contacts for deduplication...")
-    existing = paginated_query(client, cfg.contacts_db_id)
-    email_idx = _build_email_index(existing)
-    name_company_idx = _build_name_company_index(existing)
-    console.print(f"  {len(existing)} existing contacts indexed")
-
-    # Fetch event name once so all attendance records get the correct title
-    event_name = "Event"
+    event = None
     if event_id:
         try:
-            event_page = with_retry(lambda: client.pages.retrieve(page_id=event_id))
-            parts = event_page.get("properties", {}).get("Event Name", {}).get("title", [])
-            event_name = "".join(p.get("plain_text", "") for p in parts) or "Event"
+            event = Event.objects.filter(id=event_id).first()
         except Exception as exc:
-            logger.warning("Could not fetch event name for %s: %s", event_id, exc)
+            logger.warning("Could not fetch event for ID %s: %s", event_id, exc)
 
     for row in rows:
-        # Primary dedup: email is globally unique
-        if row.email and row.email in email_idx:
-            console.print(f"  [yellow]skip[/yellow] {row.name} (email match)")
+        # Check by LinkedIn URL or Name + Company duplicate
+        existing = None
+        if row.linkedin_url:
+            existing = Contact.objects.filter(linkedin_url=row.linkedin_url).first()
+        if not existing and row.name:
+            existing = Contact.objects.filter(name=row.name, company_name=row.company).first()
+
+        if existing:
+            console.print(f"  [yellow]skip[/yellow] {row.name} (duplicate match)")
             result.skipped += 1
+            if event and not Attendance.objects.filter(contact=existing, event=event).exists():
+                # Link attendance for existing contact
+                Attendance.objects.create(
+                    contact=existing,
+                    event=event,
+                    notes=f"Linked during import. referred by: {row.referred_by}",
+                )
             continue
 
-        company_id = _find_or_create_company(client, cfg, row.company) if row.company else None
-
-        # Fallback dedup: same name + same company relation
-        name_key = (row.name.lower(), company_id or "")
-        if name_key in name_company_idx:
-            console.print(f"  [yellow]skip[/yellow] {row.name} (name+company match)")
-            result.skipped += 1
-            continue
-
-        owner_id = _owner_id_from_email(cfg, row.follow_up_owner_email) if row.follow_up_owner_email else None
+        owner_name = _owner_name_from_email(cfg, row.follow_up_owner_email) if row.follow_up_owner_email else ""
 
         try:
-            props = _build_contact_properties(row, company_id, owner_id)
-            page = with_retry(lambda p=props: client.pages.create(
-                parent={"database_id": cfg.contacts_db_id},
-                properties=p,
-            ))
-            if event_id:
-                _create_attendance_record(client, cfg, page["id"], event_id, event_name, row)
+            follow_up_due_date = None
+            if row.follow_up_due:
+                try:
+                    follow_up_due_date = date.fromisoformat(row.follow_up_due)
+                except ValueError:
+                    pass
+            elif owner_name:
+                follow_up_due_date = date.today() + timedelta(days=_DEFAULT_FOLLOWUP_DAYS)
+
+            contact = Contact.objects.create(
+                name=row.name,
+                linkedin_url=row.linkedin_url,
+                job_title=row.job_title,
+                company_name=row.company,
+                pipeline_stage=_DEFAULT_STAGE,
+                source=_DEFAULT_SOURCE,
+                tier=row.tier,
+                last_contact_date=date.today(),
+                notes=row.notes,
+                follow_up_due_date=follow_up_due_date,
+                follow_up_owner=owner_name,
+                follow_up_complete=False if (row.follow_up_due or owner_name) else True,
+            )
+
+            if event:
+                Attendance.objects.create(
+                    contact=contact,
+                    event=event,
+                    notes=f"Imported. referred by: {row.referred_by}. Notes: {row.notes}",
+                )
+
             console.print(f"  [green]✓[/green] Created: {row.name}")
             result.created += 1
         except Exception as exc:
@@ -279,17 +183,16 @@ def run_import(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import event attendees into Notion CRM")
+    parser = argparse.ArgumentParser(description="Import event attendees into SQLite CRM")
     parser.add_argument("--file", required=True, help="Path to attendee CSV file")
-    parser.add_argument("--event-id", default=None, help="Notion event page ID to link attendance")
+    parser.add_argument("--event-id", default=None, help="SQLite event ID to link attendance")
     args = parser.parse_args()
 
     cfg = Config.from_env()
-    client = Client(auth=cfg.notion_token)
     rows = parse_csv(Path(args.file))
     console.print(f"Parsed {len(rows)} rows from {args.file}")
 
-    result = run_import(client, cfg, rows, args.event_id)
+    result = run_import(cfg, rows, args.event_id)
 
     console.print("\n[bold]Import complete:[/bold]")
     console.print(f"  Created : {result.created}")

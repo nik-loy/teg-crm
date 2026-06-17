@@ -5,17 +5,20 @@ Run: python -m src.linkedin.outreach_queue [--owner niklas] [--stale-days 3]
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import date, timedelta
 
-from dotenv import load_dotenv
-from notion_client import Client
+import django
 from rich.console import Console
 from rich.table import Table
 
-from src.config import Config
-from src.notion_helpers import paginated_query
+# Bootstrap Django environment before importing models
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crm.settings")
+django.setup()
 
-load_dotenv()
+from crm.contacts.models import Contact
+from src.config import Config
+
 console = Console()
 
 ORDERED_STATUSES = ["Request Sent", "Connected", "Messaged"]
@@ -27,36 +30,21 @@ STATUS_COLORS = {
 }
 
 
-def extract_name(page: dict) -> str:
-    title = page["properties"].get("Name", {}).get("title", [])
-    return title[0]["text"]["content"] if title else "(no name)"
-
-
-def extract_owner(page: dict) -> str:
-    rt = page["properties"].get("Outreach Owner", {}).get("rich_text", [])
-    return rt[0]["text"]["content"] if rt else ""
-
-
-def group_by_status(contacts: list[dict]) -> dict[str, list[dict]]:
-    groups: dict[str, list[dict]] = {s: [] for s in ORDERED_STATUSES}
+def group_by_status(contacts: list[Contact]) -> dict[str, list[Contact]]:
+    groups: dict[str, list[Contact]] = {s: [] for s in ORDERED_STATUSES}
     groups["No Status"] = []
     for c in contacts:
-        sel = (c["properties"].get("LinkedIn Outreach Status") or {}).get("select")
-        status = sel["name"] if sel else "No Status"
+        status = c.outreach_status or "No Status"
         groups.setdefault(status, []).append(c)
     return groups
 
 
-def get_stale_requests(contacts: list[dict], stale_after_days: int = 3) -> list[dict]:
-    cutoff = (date.today() - timedelta(days=stale_after_days)).isoformat()
-    stale = []
-    for c in contacts:
-        sel = (c["properties"].get("LinkedIn Outreach Status") or {}).get("select")
-        if sel and sel["name"] == "Request Sent":
-            created = c.get("created_time", "")[:10]
-            if created and created < cutoff:
-                stale.append(c)
-    return stale
+def get_stale_requests(contacts: list[Contact], stale_after_days: int = 3) -> list[Contact]:
+    cutoff = date.today() - timedelta(days=stale_after_days)
+    return [
+        c for c in contacts
+        if c.outreach_status == "Request Sent" and c.created_at.date() < cutoff
+    ]
 
 
 def main() -> None:
@@ -66,29 +54,25 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = Config.from_env()
-    client = Client(auth=cfg.notion_token)
 
-    filter_obj: dict | None = None
+    # Query contacts with outreach status
+    query = Contact.objects.exclude(outreach_status="")
     if args.owner:
-        filter_obj = {"property": "Outreach Owner", "rich_text": {"contains": args.owner}}
+        query = query.filter(outreach_owner__icontains=args.owner)
 
-    all_contacts = paginated_query(client, cfg.contacts_db_id, filter=filter_obj)
-    outreach_contacts = [
-        c for c in all_contacts
-        if (c["properties"].get("LinkedIn Outreach Status") or {}).get("select")
-    ]
+    contacts = list(query)
 
-    groups = group_by_status(outreach_contacts)
-    stale = get_stale_requests(outreach_contacts, args.stale_days)
+    groups = group_by_status(contacts)
+    stale = get_stale_requests(contacts, args.stale_days)
 
     if stale:
         console.print(f"\n[bold yellow]Stale requests (>{args.stale_days} days, no response)[/bold yellow]")
         t = Table(show_header=False, box=None, padding=(0, 2))
         for c in stale:
-            created = c.get("created_time", "")[:10]
+            created = c.created_at.date().isoformat()
             t.add_row(
-                "[yellow]•[/yellow]", extract_name(c),
-                f"[dim]{extract_owner(c)}[/dim]", f"[dim]since {created}[/dim]",
+                "[yellow]•[/yellow]", c.name,
+                f"[dim]{c.outreach_owner}[/dim]", f"[dim]since {created}[/dim]",
             )
         console.print(t)
 
@@ -100,14 +84,14 @@ def main() -> None:
         console.print(f"\n[bold {color}]{status}[/bold {color}] ({len(pages)})")
         t = Table(show_header=False, box=None, padding=(0, 2))
         for c in pages:
-            created = c.get("created_time", "")[:10]
+            created = c.created_at.date().isoformat()
             t.add_row(
-                f"[{color}]•[/{color}]", extract_name(c),
-                f"[dim]{extract_owner(c)}[/dim]", f"[dim]{created}[/dim]",
+                f"[{color}]•[/{color}]", c.name,
+                f"[dim]{c.outreach_owner}[/dim]", f"[dim]{created}[/dim]",
             )
         console.print(t)
 
-    if not outreach_contacts:
+    if not contacts:
         console.print("[dim]No LinkedIn outreach contacts found.[/dim]")
 
 

@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { notion, withRetry } from "@/lib/notion/client";
-import { pageToContact } from "@/lib/notion/map";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
-
-type PropertyFilter =
-  | { property: string; select: { equals: string } }
-  | { property: string; rich_text: { contains: string } }
-  | { property: string; title: { contains: string } }
-  | { property: string; multi_select: { contains: string } };
+import { getBackendUrl, djangoToFrontendContact } from "@/lib/backend";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -17,57 +8,42 @@ export async function GET(req: Request) {
   const owner = searchParams.get("owner") || "";
   const event = searchParams.get("event") || "";
   const q = searchParams.get("q") || "";
-  const cursor = searchParams.get("cursor") || undefined;
 
-  const dbId = env.contactsDb();
-
-  const filters: PropertyFilter[] = [];
-
-  if (stage) {
-    filters.push({ property: "Pipeline Stage", select: { equals: stage } });
-  }
-  if (tier) {
-    filters.push({ property: "Tier", select: { equals: tier } });
-  }
-  if (owner) {
-    filters.push({ property: "Outreach Owner", rich_text: { contains: owner } });
-  }
-  if (event) {
-    filters.push({ property: "Events", multi_select: { contains: event } });
-  }
-  if (q) {
-    filters.push({ property: "Name", title: { contains: q } });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filter: any =
-    filters.length === 0
-      ? undefined
-      : filters.length === 1
-      ? filters[0]
-      : { and: filters };
+  const backendUrl = getBackendUrl();
+  const url = new URL(`${backendUrl}/api/contacts/`);
+  
+  if (stage) url.searchParams.append("stage", stage);
+  if (tier) url.searchParams.append("tier", tier);
+  if (owner) url.searchParams.append("owner", owner);
+  if (event) url.searchParams.append("event", event);
+  if (q) url.searchParams.append("q", q);
 
   try {
-    const res = await withRetry(() =>
-      notion().databases.query({
-        database_id: dbId,
-        filter,
-        sorts: [{ property: "Last Contact Date", direction: "descending" }],
-        page_size: 50,
-        start_cursor: cursor,
-      })
-    );
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
-    const contacts = res.results
-      .filter((p) => p.object === "page" && "properties" in p)
-      .map((p) => pageToContact(p as PageObjectResponse));
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[contacts/list] Backend returned error:", errText);
+      return NextResponse.json({ error: "Failed to load contacts from backend" }, { status: 500 });
+    }
+
+    const data = await res.json();
+    // Support paginated or unpaginated results
+    const results = Array.isArray(data) ? data : (data.results || []);
+    const contacts = results.map(djangoToFrontendContact);
 
     return NextResponse.json({
       contacts,
-      nextCursor: res.has_more ? res.next_cursor : null,
+      nextCursor: null,
     });
   } catch (e) {
     console.error("[contacts/list]", e);
     return NextResponse.json({ error: "Failed to load contacts" }, { status: 500 });
   }
 }
+

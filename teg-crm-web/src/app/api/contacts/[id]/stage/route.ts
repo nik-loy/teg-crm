@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { notion, withRetry } from "@/lib/notion/client";
-import { select } from "@/lib/notion/props";
+import { getBackendUrl } from "@/lib/backend";
 
 const VALID_STAGES = [
   "Awareness",
@@ -25,17 +24,26 @@ export async function PATCH(
     );
   }
 
+  const backendUrl = getBackendUrl();
   try {
-    await withRetry(() =>
-      notion().pages.update({
-        page_id: id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        properties: { "Pipeline Stage": select(stage) } as any,
-      })
-    );
+    const res = await fetch(`${backendUrl}/api/contacts/${id}/`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ pipeline_stage: stage }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[stage] Backend error:", errText);
+      return NextResponse.json({ error: "Stage update failed on backend" }, { status: 500 });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[stage]", e);
     return NextResponse.json({ error: "Stage update failed" }, { status: 500 });
   }
 }
+

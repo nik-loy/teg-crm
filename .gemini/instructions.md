@@ -5,7 +5,7 @@
 - **Always run tests inside Podman containers**, never directly on the host.
 - Use `podman compose` (not `docker compose`) for all container operations.
 - Build and run: `podman compose up --build -d`
-- Run Python tests: `podman exec teg-crm-web python -m pytest`
+- Run Python tests: `podman exec teg-crm pytest`
 - Run Next.js tests: `podman exec teg-crm-web npm test`
 
 ## Architecture

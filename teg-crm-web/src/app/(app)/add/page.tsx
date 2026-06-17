@@ -30,7 +30,7 @@ interface PrepareData {
 }
 
 type SubmitResult =
-  | { type: "created"; pageId: string; notionUrl?: string }
+  | { type: "created"; pageId: string; CRMUrl?: string }
   | { type: "merged"; pageId: string }
   | { type: "updated"; pageId: string; filledFields: string[]; archived: boolean }
   | { type: "existing"; pageId: string }
@@ -88,10 +88,10 @@ function ResultCard({ result }: { result: SubmitResult }) {
     return (
       <Card className="border-green-500/50 bg-green-50/30 dark:bg-green-900/10">
         <CardContent className="pt-4">
-          <p className="text-sm font-semibold text-green-700 dark:text-green-400">Contact added to Notion</p>
-          {result.notionUrl && (
-            <a href={result.notionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline mt-1">
-              Open in Notion <ExternalLink className="size-3" />
+          <p className="text-sm font-semibold text-green-700 dark:text-green-400">Contact added to CRM</p>
+          {result.CRMUrl && (
+            <a href={result.CRMUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline mt-1">
+              Open in CRM <ExternalLink className="size-3" />
             </a>
           )}
         </CardContent>
@@ -110,7 +110,7 @@ function ResultCard({ result }: { result: SubmitResult }) {
             <p className="text-xs text-muted-foreground mt-1">All structured fields were already set.</p>
           )}
           {result.type === "updated" && result.archived && (
-            <p className="text-xs text-muted-foreground mt-1">Full profile archived to the Notion page.</p>
+            <p className="text-xs text-muted-foreground mt-1">Full profile archived to the CRM page.</p>
           )}
         </CardContent>
       </Card>
@@ -120,7 +120,7 @@ function ResultCard({ result }: { result: SubmitResult }) {
     <Card className="border-amber-500/50 bg-amber-50/30 dark:bg-amber-900/10">
       <CardContent className="pt-4">
         <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Already exists</p>
-        <p className="text-xs text-muted-foreground mt-1">This contact is already in Notion (page {result.pageId.slice(0, 8)}…).</p>
+        <p className="text-xs text-muted-foreground mt-1">This contact is already in CRM (page {result.pageId.slice(0, 8)}…).</p>
       </CardContent>
     </Card>
   );
@@ -164,7 +164,7 @@ function FieldsPreview({ profile, contact }: { profile: ExtractedProfile; contac
         );
       })}
       <p className="text-[11px] text-muted-foreground/70 pt-1">
-        The complete pasted profile is also archived verbatim to the Notion page — nothing is lost.
+        The complete pasted profile is also archived verbatim to the CRM page — nothing is lost.
       </p>
     </div>
   );
@@ -335,7 +335,7 @@ function AddContactForm() {
         setResult({ type: "error", message: data.error ?? "Request failed" });
         return;
       }
-      if (data.created) setResult({ type: "created", pageId: data.pageId, notionUrl: data.notionUrl });
+      if (data.created) setResult({ type: "created", pageId: data.pageId, CRMUrl: data.CRMUrl });
       else if (data.merged) setResult({ type: "merged", pageId: data.pageId });
       else if (data.existing) setResult({ type: "existing", pageId: data.pageId });
       else setResult({ type: "error", message: "Unexpected response" });
@@ -548,7 +548,7 @@ function AddContactForm() {
               )}
               <Button onClick={saveCreate} disabled={submitting} className="flex-1">
                 {submitting ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                Add to Notion
+                Add to CRM
               </Button>
             </div>
           </CardContent>

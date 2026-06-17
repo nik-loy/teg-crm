@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { notion, withRetry } from "@/lib/notion/client";
-import { title, richText, select, date, multiSelect } from "@/lib/notion/props";
-import { findByName } from "@/lib/notion/contacts";
+import { getBackendUrl } from "@/lib/backend";
 import type { Connection } from "@/lib/extraction/connections-types";
 
 function extractJobTitle(headline: string): string {
@@ -15,10 +12,6 @@ function extractCompany(headline: string): string {
   const atSign = headline.match(/@\s*([^|@\n(]+)/);
   if (atSign) return atSign[1].trim();
   return "";
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function POST(req: Request) {
@@ -49,7 +42,7 @@ export async function POST(req: Request) {
   const validStatuses = ["Connected", "Messaged"];
   const resolvedStatus = validStatuses.includes(outreachStatus) ? outreachStatus : "Connected";
 
-  const dbId = env.contactsDb();
+  const backendUrl = getBackendUrl();
   const today = new Date().toISOString().split("T")[0];
 
   const created: Array<{ name: string; pageId: string }> = [];
@@ -58,52 +51,74 @@ export async function POST(req: Request) {
 
   for (const connection of connections) {
     try {
-      const existingId = await withRetry(() => findByName(connection.name, dbId));
+      const searchRes = await fetch(`${backendUrl}/api/contacts/?name=${encodeURIComponent(connection.name.trim())}`);
+      let existingId = null;
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        const results = Array.isArray(data) ? data : (data.results || []);
+        if (results.length > 0) {
+          existingId = results[0].id;
+        }
+      }
+
       if (existingId) {
         skipped.push({ name: connection.name, reason: "Already exists" });
-        await sleep(350);
         continue;
       }
 
-      const props: Record<string, unknown> = {
-        Name: title(connection.name),
-        "Pipeline Stage": select("Awareness"),
-        Source: select("LinkedIn"),
-        "LinkedIn Outreach Status": select(resolvedStatus),
-        "Last Contact Date": date(connection.connectedOn || today),
-        "Contact Source": select("Connections Paste"),
+      const jobTitle = connection.headline ? extractJobTitle(connection.headline) : "";
+      const company = connection.headline ? extractCompany(connection.headline) : "";
+      
+      const payload: any = {
+        name: connection.name.trim(),
+        pipeline_stage: "Awareness",
+        source: "LinkedIn",
+        outreach_status: resolvedStatus,
+        last_contact_date: connection.connectedOn || today,
+        outreach_owner: owner,
+        profile_summary: connection.headline,
       };
+      
+      if (jobTitle) payload.job_title = jobTitle;
+      if (company) payload.notes = `Company: ${company}`;
 
-      if (owner) props["Outreach Owner"] = richText(owner);
+      const createRes = await fetch(`${backendUrl}/api/contacts/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (connection.headline) {
-        props["Profile Summary"] = richText(connection.headline);
-        const jobTitle = extractJobTitle(connection.headline);
-        if (jobTitle) props["Job Title"] = richText(jobTitle);
-        const company = extractCompany(connection.headline);
-        if (company) props["Notes"] = richText(`Company: ${company}`);
+      if (createRes.ok) {
+        const newContact = await createRes.json();
+        created.push({ name: connection.name, pageId: String(newContact.id) });
+        
+        if (eventName) {
+          const eventRes = await fetch(`${backendUrl}/api/events/?q=${encodeURIComponent(eventName)}`);
+          if (eventRes.ok) {
+            const eventData = await eventRes.json();
+            const eventResults = Array.isArray(eventData) ? eventData : (eventData.results || []);
+            if (eventResults.length > 0) {
+              await fetch(`${backendUrl}/api/attendances/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contact: newContact.id,
+                  event: eventResults[0].id,
+                  fit_score: 3,
+                  fit_reason: "Added from connections paste",
+                }),
+              });
+            }
+          }
+        }
+      } else {
+        throw new Error(await createRes.text());
       }
-
-      if (eventName) {
-        props["Events"] = multiSelect([eventName]);
-      }
-
-      const page = await withRetry(() =>
-        notion().pages.create({
-          parent: { database_id: dbId },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          properties: props as any,
-        })
-      );
-
-      created.push({ name: connection.name, pageId: page.id });
-      await sleep(350);
     } catch (e) {
       errors.push({
         name: connection.name,
         reason: e instanceof Error ? e.message : "Unknown error",
       });
-      await sleep(350);
     }
   }
 

@@ -1,5 +1,5 @@
-import { getTodayBuckets, type TodayBuckets } from "@/lib/notion/contacts";
-import { env } from "@/lib/env";
+import { getTodayBuckets } from "@/lib/backend";
+import type { TodayBuckets } from "@/lib/types";
 import { getTeam } from "@/lib/config";
 import type { Contact } from "@/lib/types";
 import Link from "next/link";
@@ -102,11 +102,11 @@ export default async function TodayPage({ searchParams }: PageProps) {
   let errorMsg: string | null = null;
 
   try {
-    buckets = await getTodayBuckets(env.contactsDb(), owner);
+    buckets = await getTodayBuckets(owner);
   } catch (e) {
     console.error("[today page]", e);
     errorMsg =
-      e instanceof Error ? e.message : "Could not reach Notion. Check your env vars.";
+      e instanceof Error ? e.message : "Could not reach backend. Check your env vars.";
   }
 
   const totalItems = buckets

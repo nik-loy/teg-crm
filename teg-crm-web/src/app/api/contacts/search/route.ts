@@ -1,30 +1,31 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { findByUrl, findByName, queryAll } from "@/lib/notion/contacts";
+import { getBackendUrl } from "@/lib/backend";
 import { normalizeLinkedInUrl } from "@/app/api/contacts/route";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const urlParam = searchParams.get("url");
   const nameParam = searchParams.get("name");
-  const dbId = env.contactsDb();
 
   try {
+    const backendUrl = getBackendUrl();
     if (urlParam) {
       const normalized = normalizeLinkedInUrl(urlParam);
       if (!normalized) return NextResponse.json({ found: false });
-      const pageId = await findByUrl(normalized, dbId);
-      if (!pageId) return NextResponse.json({ found: false });
-      const contacts = await queryAll(dbId, {
-        property: "LinkedIn URL",
-        url: { equals: normalized },
-      });
-      return NextResponse.json({ found: true, contact: contacts[0] ?? null });
+      const res = await fetch(`${backendUrl}/api/contacts/?linkedin_url=${encodeURIComponent(normalized)}`);
+      if (!res.ok) return NextResponse.json({ found: false });
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : (data.results || []);
+      if (results.length > 0) return NextResponse.json({ found: true, contact: results[0] });
+      return NextResponse.json({ found: false });
     }
     if (nameParam) {
-      const pageId = await findByName(nameParam, dbId);
-      if (!pageId) return NextResponse.json({ found: false });
-      return NextResponse.json({ found: true, pageId });
+      const res = await fetch(`${backendUrl}/api/contacts/?name=${encodeURIComponent(nameParam)}`);
+      if (!res.ok) return NextResponse.json({ found: false });
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : (data.results || []);
+      if (results.length > 0) return NextResponse.json({ found: true, pageId: String(results[0].id) });
+      return NextResponse.json({ found: false });
     }
     return NextResponse.json(
       { error: "url or name param required" },

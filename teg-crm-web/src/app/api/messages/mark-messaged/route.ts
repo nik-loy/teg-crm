@@ -1,24 +1,5 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
-import { notion, withRetry } from "@/lib/notion/client";
-import { title, richText, select, date, multiSelect } from "@/lib/notion/props";
-import { queryAll } from "@/lib/notion/contacts";
-import type { Contact } from "@/lib/types";
-
-async function findContactByName(name: string, dbId: string): Promise<Contact | undefined> {
-  const needle = name.toLowerCase();
-  const results = await withRetry(() =>
-    queryAll(dbId, {
-      property: "Name",
-      title: { contains: name },
-    })
-  );
-  return results.find((c) => c.name.toLowerCase() === needle);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { getBackendUrl } from "@/lib/backend";
 
 export async function POST(req: Request) {
   let body: { names?: string[]; owner?: string; eventName?: string };
@@ -40,7 +21,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "owner is required" }, { status: 400 });
   }
 
-  const dbId = env.contactsDb();
+  const backendUrl = getBackendUrl();
   const today = new Date().toISOString().split("T")[0];
 
   const updated: string[] = [];
@@ -49,59 +30,97 @@ export async function POST(req: Request) {
 
   for (const name of names) {
     try {
-      const contact = await findContactByName(name, dbId);
-
-      if (contact) {
-        // Update existing contact: set Messaged status, refresh date, append event.
-        const existingEvents = contact.events ?? [];
-        const mergedEvents =
-          eventName && !existingEvents.includes(eventName)
-            ? [...existingEvents, eventName]
-            : existingEvents;
-
-        const updateProps: Record<string, unknown> = {
-          "LinkedIn Outreach Status": select("Messaged"),
-          "Last Contact Date": date(today),
-        };
-        if (mergedEvents.length > 0) {
-          updateProps["Events"] = multiSelect(mergedEvents);
+      const searchRes = await fetch(`${backendUrl}/api/contacts/?name=${encodeURIComponent(name.trim())}`);
+      let existingId = null;
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        const results = Array.isArray(data) ? data : (data.results || []);
+        if (results.length > 0) {
+          existingId = results[0].id;
         }
-
-        await withRetry(() =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          notion().pages.update({ page_id: contact.id, properties: updateProps as any })
-        );
-        updated.push(name);
-      } else {
-        // Create minimal contact — flagged so the UI can warn the rep.
-        const createProps: Record<string, unknown> = {
-          Name: title(name),
-          "Pipeline Stage": select("Awareness"),
-          Source: select("LinkedIn"),
-          "LinkedIn Outreach Status": select("Messaged"),
-          "Last Contact Date": date(today),
-          "Contact Source": select("Messages Paste"),
-        };
-        if (owner) createProps["Outreach Owner"] = richText(owner);
-        if (eventName) createProps["Events"] = multiSelect([eventName]);
-
-        await withRetry(() =>
-          notion().pages.create({
-            parent: { database_id: dbId },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            properties: createProps as any,
-          })
-        );
-        createdMinimal.push(name);
       }
 
-      await sleep(350); // respect Notion 3 req/s rate limit
+      if (existingId) {
+        const patchRes = await fetch(`${backendUrl}/api/contacts/${existingId}/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            outreach_status: "Messaged",
+            last_contact_date: today,
+          }),
+        });
+        if (patchRes.ok) {
+          updated.push(name);
+          
+          if (eventName) {
+            // Check event and attendance
+            const eventRes = await fetch(`${backendUrl}/api/events/?q=${encodeURIComponent(eventName)}`);
+            if (eventRes.ok) {
+              const eventData = await eventRes.json();
+              const eventResults = Array.isArray(eventData) ? eventData : (eventData.results || []);
+              if (eventResults.length > 0) {
+                await fetch(`${backendUrl}/api/attendances/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contact: existingId,
+                    event: eventResults[0].id,
+                    fit_score: 3,
+                    fit_reason: "Added from messages paste",
+                  }),
+                });
+              }
+            }
+          }
+        } else {
+          throw new Error(await patchRes.text());
+        }
+      } else {
+        const createRes = await fetch(`${backendUrl}/api/contacts/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            pipeline_stage: "Awareness",
+            source: "LinkedIn",
+            outreach_status: "Messaged",
+            last_contact_date: today,
+            outreach_owner: owner,
+          }),
+        });
+
+        if (createRes.ok) {
+          const newContact = await createRes.json();
+          createdMinimal.push(name);
+
+          if (eventName) {
+            const eventRes = await fetch(`${backendUrl}/api/events/?q=${encodeURIComponent(eventName)}`);
+            if (eventRes.ok) {
+              const eventData = await eventRes.json();
+              const eventResults = Array.isArray(eventData) ? eventData : (eventData.results || []);
+              if (eventResults.length > 0) {
+                await fetch(`${backendUrl}/api/attendances/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contact: newContact.id,
+                    event: eventResults[0].id,
+                    fit_score: 3,
+                    fit_reason: "Added from messages paste",
+                  }),
+                });
+              }
+            }
+          }
+        } else {
+          throw new Error(await createRes.text());
+        }
+      }
     } catch (e) {
       errors.push({
         name,
         reason: e instanceof Error ? e.message : "Unknown error",
       });
-      await sleep(350);
     }
   }
 

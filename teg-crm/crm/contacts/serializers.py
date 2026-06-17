@@ -12,12 +12,15 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class ContactSerializer(serializers.ModelSerializer):
+    events = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
-        fields = [
-            "id", "name", "company_name", "linkedin_url", "job_title", 
-            "profile_summary", "experience", "about"
-        ]
+        fields = "__all__"
+
+    def get_events(self, obj):
+        return list(obj.attendances.values_list("event__name", flat=True))
+
 
 
 class AttendanceSerializer(serializers.ModelSerializer):

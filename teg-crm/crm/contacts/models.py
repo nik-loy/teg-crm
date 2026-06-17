@@ -63,7 +63,7 @@ class InteractionType(models.TextChoices):
 class Contact(models.Model):
     # Core
     name = models.CharField(max_length=255)
-    linkedin_url = models.URLField(unique=True, blank=True, default="")
+    linkedin_url = models.URLField(unique=True, blank=True, null=True)
     job_title = models.CharField(max_length=255, blank=True)
     company_name = models.CharField(
         max_length=255, blank=True,

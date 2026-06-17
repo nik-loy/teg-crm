@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { notion, withRetry } from "@/lib/notion/client";
-import { select, richText } from "@/lib/notion/props";
+import { getBackendUrl } from "@/lib/backend";
 
-const ALLOWED_PROPERTIES = new Set([
-  "Tier",
-  "LinkedIn Outreach Status",
-  "Outreach Owner",
-  "Notes",
-]);
+const FIELD_MAP: Record<string, string> = {
+  "Tier": "tier",
+  "LinkedIn Outreach Status": "outreach_status",
+  "Outreach Owner": "outreach_owner",
+  "Notes": "notes",
+};
 
 export async function PATCH(
   req: Request,
@@ -17,9 +16,9 @@ export async function PATCH(
   const body = await req.json();
   const { property, value }: { property?: string; value?: string } = body;
 
-  if (!property || !ALLOWED_PROPERTIES.has(property)) {
+  if (!property || !FIELD_MAP[property]) {
     return NextResponse.json(
-      { error: `property must be one of: ${[...ALLOWED_PROPERTIES].join(", ")}` },
+      { error: `property must be one of: ${Object.keys(FIELD_MAP).join(", ")}` },
       { status: 400 }
     );
   }
@@ -27,20 +26,28 @@ export async function PATCH(
     return NextResponse.json({ error: "value is required" }, { status: 400 });
   }
 
-  const selectProps = new Set(["Tier", "LinkedIn Outreach Status"]);
-  const notionValue = selectProps.has(property) ? select(value) : richText(value);
+  const fieldName = FIELD_MAP[property];
+  const backendUrl = getBackendUrl();
 
   try {
-    await withRetry(() =>
-      notion().pages.update({
-        page_id: id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        properties: { [property]: notionValue } as any,
-      })
-    );
+    const res = await fetch(`${backendUrl}/api/contacts/${id}/`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ [fieldName]: value }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[contacts/update] Backend error:", errText);
+      return NextResponse.json({ error: "Update failed on backend" }, { status: 500 });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[contacts/update]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
+

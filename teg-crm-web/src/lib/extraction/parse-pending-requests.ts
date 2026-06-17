@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { buildPendingRequestsPrompt } from "./pending-requests-prompt";
 import type { PendingRequest, ParseResult } from "./pending-requests-types";
 
@@ -261,17 +261,35 @@ async function parseWithGemini(pastedText: string, apiKey: string): Promise<RawP
   try {
     console.log("[pending-requests/gemini] Calling gemini-2.0-flash...");
     const client = new GoogleGenerativeAI(apiKey);
-    const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = client.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: buildPendingRequestsPrompt(),
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+      ],
+    });
     const response = await model.generateContent({
       contents: [
         {
           role: "user",
           parts: [
             {
-              text:
-                buildPendingRequestsPrompt() +
-                "\n\n---\n\nParse this LinkedIn pending requests text:\n\n" +
-                pastedText,
+              text: "Parse this LinkedIn pending requests text:\n\n" + pastedText,
             },
           ],
         },

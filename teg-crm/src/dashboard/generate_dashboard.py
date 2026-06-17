@@ -1,4 +1,4 @@
-"""Generates a static HTML pipeline dashboard from Notion data.
+"""Generates a static HTML pipeline dashboard from SQLite data.
 
 Run: python -m src.dashboard.generate_dashboard [--output dashboard_output/index.html]
 """
@@ -7,16 +7,21 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+import django
 from dotenv import load_dotenv
-from notion_client import Client
 from rich.console import Console
 
+# Bootstrap Django environment before importing models
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "crm.settings")
+django.setup()
+
+from crm.contacts.models import Contact
 from src.config import Config
-from src.notion_helpers import paginated_query
 
 load_dotenv()
 console = Console()
@@ -34,35 +39,33 @@ class DashboardData:
     generated_at: str = ""
 
 
-def aggregate(contacts: list[dict]) -> DashboardData:
-    """Pure aggregation — no Notion calls. Accepts raw Notion page dicts."""
+def aggregate(contacts: list[Contact]) -> DashboardData:
+    """Pure aggregation — accepts Contact model objects."""
     data = DashboardData(generated_at=datetime.now(UTC).isoformat())
     data.total_contacts = len(contacts)
-    today = date.today().isoformat()
+    today = date.today()
 
     for contact in contacts:
-        props = contact.get("properties", {})
-
-        stage = props.get("Pipeline Stage", {}).get("select")
+        stage = contact.pipeline_stage
         if stage:
-            data.by_stage[stage["name"]] = data.by_stage.get(stage["name"], 0) + 1
+            data.by_stage[stage] = data.by_stage.get(stage, 0) + 1
 
-        tier = props.get("Tier", {}).get("select")
+        tier = contact.tier
         if tier:
-            data.by_tier[tier["name"]] = data.by_tier.get(tier["name"], 0) + 1
+            data.by_tier[tier] = data.by_tier.get(tier, 0) + 1
 
-        source = props.get("Source", {}).get("select")
+        source = contact.source
         if source:
-            data.by_source[source["name"]] = data.by_source.get(source["name"], 0) + 1
+            data.by_source[source] = data.by_source.get(source, 0) + 1
 
-        fu_complete = props.get("Follow-Up Complete", {}).get("checkbox", False)
-        fu_due = props.get("Follow-Up Due Date", {}).get("date")
-        if not fu_complete and fu_due and fu_due.get("start", "") < today:
+        fu_complete = contact.follow_up_complete
+        fu_due = contact.follow_up_due_date
+        if not fu_complete and fu_due and fu_due < today:
             data.overdue_count += 1
 
-        created = contact.get("created_time", "")
+        created = contact.created_at
         if created:
-            month = created[:7]
+            month = created.strftime("%Y-%m")
             data.new_by_month[month] = data.new_by_month.get(month, 0) + 1
 
     return data
@@ -94,11 +97,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = Config.from_env()
-    client = Client(auth=cfg.notion_token)
-
-    console.print("Fetching contacts from Notion...")
-    contacts = paginated_query(client, cfg.contacts_db_id)
+    console.print("Fetching contacts from SQLite...")
+    contacts = list(Contact.objects.all())
     console.print(f"  [green]✓[/green] {len(contacts)} contacts loaded")
 
     data = aggregate(contacts)

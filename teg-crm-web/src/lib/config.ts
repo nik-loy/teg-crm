@@ -44,7 +44,6 @@ export interface EventConfig {
 }
 
 export interface TeamMember {
-  notion_id: string;
   name: string;
   email: string;
   utm_source: string;

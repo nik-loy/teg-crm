@@ -73,9 +73,13 @@ export default function PendingRequestsPage() {
       if (result.requests.length > 0) {
         setCheckingDupes(true);
         try {
+          const token = localStorage.getItem("teg_jwt");
           const dupeRes = await fetch("/api/pending-requests/check-duplicates", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+            },
             body: JSON.stringify({ names: result.requests.map((r) => r.name) }),
           });
           if (dupeRes.ok) {
@@ -102,9 +106,13 @@ export default function PendingRequestsPage() {
     if (!parseResult?.requests.length || !owner || !selectedEvent) return;
     setCreating(true);
     try {
+      const token = localStorage.getItem("teg_jwt");
       const res = await fetch("/api/pending-requests/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           requests: parseResult.requests,
           owner,
@@ -327,7 +335,7 @@ export default function PendingRequestsPage() {
                     {creating ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating contacts in Notion…
+                        Creating contacts in CRM…
                       </>
                     ) : dupeCount > 0 ? (
                       <>

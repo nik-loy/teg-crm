@@ -4,10 +4,10 @@ from django.contrib import admin
 
 from .models import (
     Attendance,
-    Company,
     Contact,
     Event,
     Interaction,
+    OutreachDraft,
     Speaker,
     TeamMember,
 )
@@ -30,11 +30,11 @@ class AttendanceInline(admin.TabularInline):
 
 # ── Model Admins ─────────────────────────────────────────────────────────────
 
-@admin.register(Company)
-class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("name", "industry", "is_blacklisted", "updated_at")
-    list_filter = ("is_blacklisted", "industry")
-    search_fields = ("name",)
+@admin.register(OutreachDraft)
+class OutreachDraftAdmin(admin.ModelAdmin):
+    list_display = ("attendance", "step_number", "status", "created_at")
+    list_filter = ("status", "step_number")
+    search_fields = ("attendance__contact__name", "generated_text")
 
 
 @admin.register(Contact)
@@ -52,7 +52,7 @@ class ContactAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {
-            "fields": ("name", "linkedin_url", "job_title", "company", "company_name"),
+            "fields": ("name", "linkedin_url", "job_title", "company_name"),
         }),
         ("Pipeline", {
             "fields": ("tier", "pipeline_stage", "source"),
@@ -84,12 +84,20 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = ("name",)
     prepopulated_fields = {"slug": ("name",)}
+    fieldsets = (
+        (None, {
+            "fields": ("name", "slug", "date", "location", "description", "luma_url", "is_active")
+        }),
+        ("AI Prompts", {
+            "fields": ("outreach_prompt", "fit_scoring_prompt"),
+        }),
+    )
 
 
 @admin.register(Attendance)
 class AttendanceAdmin(admin.ModelAdmin):
-    list_display = ("contact", "event", "attended", "registered_at")
-    list_filter = ("event", "attended")
+    list_display = ("contact", "event", "attended", "fit_score", "registered_at")
+    list_filter = ("event", "attended", "fit_score")
     search_fields = ("contact__name",)
 
 

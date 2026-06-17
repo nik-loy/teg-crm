@@ -57,25 +57,7 @@ class InteractionType(models.TextChoices):
 
 # ── Models ───────────────────────────────────────────────────────────────────
 
-class Company(models.Model):
-    name = models.CharField(max_length=255, unique=True)
-    industry = models.CharField(max_length=255, blank=True)
-    website = models.URLField(blank=True)
-    linkedin_url = models.URLField(blank=True)
-    notes = models.TextField(blank=True)
-    is_blacklisted = models.BooleanField(
-        default=False,
-        help_text="If True, contacts from this company are excluded from outreach.",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        verbose_name_plural = "companies"
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
 
 
 class Contact(models.Model):
@@ -83,12 +65,9 @@ class Contact(models.Model):
     name = models.CharField(max_length=255)
     linkedin_url = models.URLField(unique=True, blank=True, default="")
     job_title = models.CharField(max_length=255, blank=True)
-    company = models.ForeignKey(
-        Company, on_delete=models.SET_NULL, null=True, blank=True, related_name="contacts"
-    )
     company_name = models.CharField(
         max_length=255, blank=True,
-        help_text="Raw company name (before linking to Company record).",
+        help_text="Company name as text.",
     )
 
     # Pipeline
@@ -148,6 +127,8 @@ class Event(models.Model):
     description = models.TextField(blank=True)
     luma_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
+    outreach_prompt = models.TextField(blank=True, help_text="Event-specific base prompt template for message generation.")
+    fit_scoring_prompt = models.TextField(blank=True, help_text="Prompt defining the criteria for scoring leads 1-5.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -163,6 +144,8 @@ class Attendance(models.Model):
     registered_at = models.DateTimeField(auto_now_add=True)
     attended = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
+    fit_score = models.IntegerField(null=True, blank=True, help_text="AI calculated fit score (1-5) for this specific event.")
+    fit_reason = models.TextField(blank=True, help_text="AI rationale for fit score.")
 
     class Meta:
         unique_together = ("contact", "event")
@@ -217,3 +200,24 @@ class TeamMember(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class OutreachDraft(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "Pending", "Pending"
+        APPROVED = "Approved", "Approved"
+        REJECTED = "Rejected", "Rejected"
+        SENT = "Sent", "Sent"
+
+    attendance = models.ForeignKey(Attendance, on_delete=models.CASCADE, related_name="drafts")
+    step_number = models.IntegerField(default=1, help_text="Step number in the sequence.")
+    generated_text = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Draft for {self.attendance.contact.name} (Step {self.step_number})"

@@ -130,6 +130,15 @@ vi.mock("@google/generative-ai", () => ({
   GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
     getGenerativeModel: () => ({ generateContent: geminiGenerate }),
   })),
+  HarmCategory: {
+    HARM_CATEGORY_HATE_SPEECH: "HARM_CATEGORY_HATE_SPEECH",
+    HARM_CATEGORY_HARASSMENT: "HARM_CATEGORY_HARASSMENT",
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    HARM_CATEGORY_DANGEROUS_CONTENT: "HARM_CATEGORY_DANGEROUS_CONTENT",
+  },
+  HarmBlockThreshold: {
+    BLOCK_MEDIUM_AND_ABOVE: "BLOCK_MEDIUM_AND_ABOVE",
+  },
 }));
 
 beforeEach(() => geminiGenerate.mockReset());

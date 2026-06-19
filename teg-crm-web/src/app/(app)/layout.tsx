@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck, CalendarRange } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck, CalendarRange, Database } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 const NAV = [
   { href: "/today", label: "Today", icon: Home },
@@ -62,7 +62,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t p-4">
+        <div className="border-t p-4 space-y-2">
+          <a
+            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "ghost", size: "sm" }) + " w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground flex items-center"}
+          >
+            <Database className="mr-3 h-4 w-4" />
+            Admin Panel
+          </a>
           <Button
             variant="ghost"
             size="sm"
@@ -77,9 +86,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 inset-x-0 h-14 border-b bg-background flex items-center justify-between px-4 z-10">
         <span className="font-semibold">TEG CRM</span>
-        <Button variant="ghost" size="sm" onClick={logout}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-1">
+          <a
+            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Admin Panel"
+            className={buttonVariants({ variant: "ghost", size: "icon" })}
+          >
+            <Database className="h-5 w-5" />
+          </a>
+          <Button variant="ghost" size="sm" onClick={logout}>
+            Sign out
+          </Button>
+        </div>
       </div>
 
       {/* Mobile bottom nav */}

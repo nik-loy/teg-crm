@@ -108,6 +108,31 @@ class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
 
+    @action(detail=True, methods=["get"])
+    def attendances(self, request, pk=None):
+        event = self.get_object()
+        contacts = event.contacts.all().select_related("rating")
+        
+        results = []
+        for c in contacts:
+            score = c.rating.score if hasattr(c, "rating") and c.rating else None
+            reason = c.rating.reason if hasattr(c, "rating") and c.rating else ""
+            
+            results.append({
+                "id": c.id,  # Using contact ID as attendance ID for now to make UI happy
+                "fit_score": score,
+                "fit_reason": reason,
+                "contact": {
+                    "id": c.id,
+                    "name": c.name,
+                    "linkedin_url": c.linkedin_url,
+                    "job_title": "",  # Deprecated
+                    "company_name": ""  # Deprecated
+                }
+            })
+            
+        return Response(results)
+
 
 class TeamMemberViewSet(viewsets.ModelViewSet):
     queryset = TeamMember.objects.all()
@@ -225,5 +250,9 @@ Return EXACTLY 3 variations in a JSON array of strings."""
         exact_name = self.request.query_params.get("name")
         if exact_name:
             queryset = queryset.filter(name=exact_name)
+            
+        owner = self.request.query_params.get("owner")
+        if owner:
+            queryset = queryset.filter(follow_up_owner__name__icontains=owner)
             
         return queryset

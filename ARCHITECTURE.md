@@ -80,24 +80,9 @@ classDiagram
         +int id
         +string name
         +string linkedin_url [unique]
-        +string job_title
-        +string company_name
-        +string tier [Tier.choices]
-        +string pipeline_stage [PipelineStage.choices]
-        +string source [ContactSource.choices]
-        +string outreach_status [OutreachStatus.choices]
-        +string outreach_owner
-        +date last_contact_date
-        +date follow_up_due_date
-        +string follow_up_owner
+        +Event event [FK]
+        +TeamMember follow_up_owner [FK]
         +bool follow_up_complete
-        +text profile_summary
-        +string location
-        +text experience
-        +text education
-        +text about
-        +bool open_to_work
-        +string connection_degree
     }
 
     class Event {
@@ -112,37 +97,6 @@ classDiagram
         +bool is_active
     }
 
-    class Attendance {
-        +int id
-        +Contact contact [FK]
-        +Event event [FK]
-        +bool attended
-        +int fit_score
-        +text fit_reason
-        +datetime registered_at
-    }
-
-    class Interaction {
-        +int id
-        +Contact contact [FK]
-        +string summary
-        +string interaction_type [InteractionType.choices]
-        +date date
-        +text next_action
-        +text notes
-    }
-
-    class Speaker {
-        +int id
-        +string name
-        +string company
-        +string title
-        +Event event [FK]
-        +string linkedin_url
-        +text bio
-        +bool confirmed
-    }
-
     class TeamMember {
         +int id
         +string name
@@ -151,32 +105,30 @@ classDiagram
         +bool is_active
     }
 
-    class OutreachDraft {
-        +int id
-        +Attendance attendance [FK]
-        +int step_number
-        +text generated_text
-        +string status [Status.choices]
-    }
-
     class RawProfileData {
         +int id
         +Contact contact [OneToOne]
         +text raw_text
     }
 
-    Contact "1" --* "many" Attendance : has
-    Event "1" --* "many" Attendance : has
-    Contact "1" --* "many" Interaction : logs
-    Event "1" --* "many" Speaker : features
-    Attendance "1" --* "many" OutreachDraft : drafts
+    class Rating {
+        +int id
+        +Contact contact [OneToOne]
+        +int score
+        +text reason
+    }
+
+    Event "1" --* "many" Contact : has
+    TeamMember "1" --* "many" Contact : owns follow-up
     Contact "1" --o "1" RawProfileData : references
+    Contact "1" --o "1" Rating : has
 ```
 
 #### Code-Level Data Details & Signals
-- **[Contact](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L63)**: Represents an outreach prospect. It has choices for [Tier](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L35) (Tier 1-3), [PipelineStage](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L27) (Awareness, First Attendance, Engaged, Deepening, Activated), and [OutreachStatus](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L19) (Request Sent, Connected, Messaged, No Response, Withdrawn).
-- **[Attendance](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L141)**: Captures many-to-many linkages between contacts and events. It stores AI-generated `fit_score` ratings (1-5 scale) and the corresponding `fit_reason`.
-- **[post_save Signal (`score_attendance`)](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L237)**: Automatically triggered upon creating an `Attendance` record. If the associated event specifies a `fit_scoring_prompt`, the backend executes an asynchronous call to Google Gemini (`gemini-2.5-flash`) using the contact's parsed profile details to predict a fit score and output a rationale back to `Attendance`.
+- **[Contact](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Represents an outreach prospect. Contains fields for the LinkedIn URL, an associated `Event`, and a `TeamMember` responsible for follow-up.
+- **[Event](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores details about CRM events. Contacts are linked directly to events via a foreign key.
+- **[Rating](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores AI-generated `score` ratings (1-5 scale) and the corresponding `reason` for the contact.
+- **Asynchronous Scoring**: Triggered upon profile enrichment. The backend executes an asynchronous call to Google Gemini (`gemini-2.5-flash`) using the contact's parsed profile details to predict a fit score and output a rationale.
 
 ### 3. API Views & Custom Actions ([views.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py))
 

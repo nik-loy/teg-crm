@@ -29,6 +29,6 @@ test.describe('Event Creation', () => {
     await page.click('button:has-text("Save Event")');
     
     // Verify dialog closes and event appears in the list
-    await expect(page.locator('text="Test Event Playwright"')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text="Test Event Playwright"').first()).toBeVisible({ timeout: 5000 });
   });
 });

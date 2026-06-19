@@ -21,17 +21,27 @@ interface ContactDetailProps {
 
 function ContactDetail({ contact, onClose, onUpdated }: ContactDetailProps) {
   const [saving, setSaving] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
-  async function toggleFollowUp() {
+  useEffect(() => {
+    backendFetch("/api/events/").then(r => r.json()).then(data => setEvents(data.results || data));
+    backendFetch("/api/team/").then(r => r.json()).then(data => setTeamMembers(data.results || data));
+  }, []);
+
+  async function updateField(field: string, value: any) {
     setSaving(true);
     try {
+      const payload: any = {};
+      payload[field] = value;
       const res = await backendFetch(`/api/contacts/${contact.id}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ follow_up_complete: !contact.followUpComplete }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-        onUpdated({ ...contact, followUpComplete: !contact.followUpComplete });
+        const data = await res.json();
+        onUpdated(djangoToFrontendContact(data));
       }
     } finally {
       setSaving(false);
@@ -43,14 +53,38 @@ function ContactDetail({ contact, onClose, onUpdated }: ContactDetailProps) {
       <div className="grid grid-cols-2 gap-x-6 gap-y-2">
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Owner</p>
-          <p>{contact.followUpOwner || "—"}</p>
+          <select 
+            className="w-full mt-1 border rounded p-1 text-sm bg-background"
+            value={contact.followUpOwnerId || ""}
+            onChange={(e) => updateField("follow_up_owner_id", e.target.value || null)}
+            disabled={saving}
+          >
+            <option value="">— Unassigned —</option>
+            {teamMembers.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Event</p>
+          <select 
+            className="w-full mt-1 border rounded p-1 text-sm bg-background"
+            value={contact.eventId || ""}
+            onChange={(e) => updateField("event_id", e.target.value || null)}
+            disabled={saving}
+          >
+            <option value="">— Unassigned —</option>
+            {events.map(e => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
         </div>
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Follow-up Complete</p>
           <div className="flex items-center gap-2 mt-1">
             <span className={`inline-block w-2 h-2 rounded-full ${contact.followUpComplete ? "bg-green-500" : "bg-amber-500"}`} />
             <span>{contact.followUpComplete ? "Yes" : "No"}</span>
-            <Button size="sm" variant="outline" className="h-6 ml-2 text-xs py-0" onClick={toggleFollowUp} disabled={saving}>
+            <Button size="sm" variant="outline" className="h-6 ml-2 text-xs py-0" onClick={() => updateField("follow_up_complete", !contact.followUpComplete)} disabled={saving}>
               {contact.followUpComplete ? "Mark Pending" : "Mark Complete"}
             </Button>
           </div>

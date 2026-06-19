@@ -61,7 +61,7 @@ def generate_rating_task(contact_id):
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=FitScore,
-                max_output_tokens=150,
+                max_output_tokens=500,
             ),
         )
         
@@ -151,9 +151,9 @@ class ContactViewSet(viewsets.ModelViewSet):
             defaults={"raw_text": raw_text}
         )
 
-        threading.Thread(target=generate_rating_task, args=(contact.id,)).start()
+        generate_rating_task(contact.id)
 
-        return Response({"status": "Profile enriched and rating generation started"})
+        return Response({"status": "Profile enriched and rating generated"})
 
     @action(detail=True, methods=["post"])
     def generate_message(self, request, pk=None):

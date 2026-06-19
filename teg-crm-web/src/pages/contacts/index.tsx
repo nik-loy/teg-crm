@@ -225,7 +225,7 @@ function ContactsInner() {
     if (!enrichSelectedId) return;
     setEnriching(true);
     try {
-      const res = await backendFetch(`/api/contacts/${enrichSelectedId}/enrich/`, {
+      const res = await backendFetch(`/api/contacts/enrich/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -309,6 +309,7 @@ function ContactsInner() {
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Name</th>
                 <th className="px-3 py-2 text-left font-medium hidden md:table-cell">Owner</th>
+                <th className="px-3 py-2 text-left font-medium hidden md:table-cell">Event</th>
                 <th className="px-3 py-2 text-left font-medium">Follow-up</th>
                 <th className="px-3 py-2 text-left font-medium hidden lg:table-cell">Rating Score</th>
                 <th className="px-3 py-2 text-left font-medium hidden xl:table-cell max-w-sm">Rating Rationale</th>
@@ -333,6 +334,9 @@ function ContactsInner() {
                   </td>
                   <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
                     {c.followUpOwner || "—"}
+                  </td>
+                  <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
+                    {c.eventName || "—"}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${c.followUpComplete ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>

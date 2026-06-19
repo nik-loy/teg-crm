@@ -38,6 +38,8 @@ export function djangoToFrontendContact(d: any): Contact {
     followUpOwner: d.follow_up_owner ? d.follow_up_owner.name : "",
     followUpOwnerId: d.follow_up_owner ? String(d.follow_up_owner.id) : undefined,
     followUpComplete: !!d.follow_up_complete,
+    eventName: d.event ? d.event.name : undefined,
+    eventId: d.event ? String(d.event.id) : undefined,
     rating: d.rating ? {
       score: d.rating.score,
       reason: d.rating.reason

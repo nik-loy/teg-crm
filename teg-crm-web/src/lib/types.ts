@@ -15,10 +15,12 @@ export type PipelineStage =
 export interface Contact {
   id: string;
   name: string;
-  linkedinUrl: string;
-  followUpOwner: string;
+  linkedinUrl?: string;
+  followUpOwner?: string;
   followUpOwnerId?: string;
   followUpComplete: boolean;
+  eventName?: string;
+  eventId?: string;
   rating?: {
     score: number;
     reason: string;

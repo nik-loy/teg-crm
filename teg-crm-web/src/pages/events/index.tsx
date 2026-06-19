@@ -22,28 +22,16 @@ export default function EventsPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
   const [date, setDate] = useState("");
-  const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
   const [lumaUrl, setLumaUrl] = useState("");
   const [fitScoringPrompt, setFitScoringPrompt] = useState("Rate 1-5 how relevant this person is for an executive networking group...");
   const [outreachPrompt, setOutreachPrompt] = useState("Hi {name}, I saw you are speaking at {event_name}...");
 
   // Test Prompt state
   const [testOpen, setTestOpen] = useState(false);
-  const [testSelectedSlug, setTestSelectedSlug] = useState("");
+  const [testSelectedId, setTestSelectedId] = useState("");
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState("");
-
-  // Auto-generate slug from name
-  useEffect(() => {
-    const formatted = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-    setSlug(formatted);
-  }, [name]);
 
   async function loadEvents() {
     setLoading(true);
@@ -78,7 +66,7 @@ export default function EventsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !slug || !date) return;
+    if (!name || !date) return;
     
     setSubmitting(true);
     try {
@@ -87,12 +75,8 @@ export default function EventsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          slug,
           date,
-          location,
-          description,
           luma_url: lumaUrl,
-          is_active: true,
           fit_scoring_prompt: fitScoringPrompt,
           outreach_prompt: outreachPrompt,
         }),
@@ -102,16 +86,13 @@ export default function EventsPage() {
         setIsOpen(false);
         // Clear form
         setName("");
-        setSlug("");
         setDate("");
-        setLocation("");
-        setDescription("");
         setLumaUrl("");
         // Reload list
         loadEvents();
       } else {
-        const errData = await res.json();
-        alert(errData.error || "Failed to create event. Make sure slug is unique.");
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to create event. Please check inputs.");
       }
     } catch (err) {
       console.error(err);
@@ -122,7 +103,7 @@ export default function EventsPage() {
   }
 
   async function handleTestPrompt() {
-    if (!testSelectedSlug) return;
+    if (!testSelectedId) return;
     setTestRunning(true);
     setTestResult("");
     try {
@@ -131,7 +112,7 @@ export default function EventsPage() {
             "Content-Type": "application/json",
             ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         };
-        const res = await fetch(`/api/events/${testSelectedSlug}/test_prompt/`, {
+        const res = await fetch(`/api/events/${testSelectedId}/test_prompt/`, {
             method: "POST",
             headers
         });
@@ -149,8 +130,7 @@ export default function EventsPage() {
   }
 
   const filteredEvents = events.filter((e) =>
-    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (e.location && e.location.toLowerCase().includes(searchQuery.toLowerCase()))
+    e.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -234,21 +214,12 @@ export default function EventsPage() {
                     </CardTitle>
                     <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors group-hover:translate-x-0.5 duration-200" />
                   </div>
-                  <CardDescription className="line-clamp-2 mt-1">
-                    {event.description || "No description provided."}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 text-xs text-muted-foreground space-y-2">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span>{new Date(event.date).toLocaleDateString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                   </div>
-                  {event.location && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{event.location}</span>
-                    </div>
-                  )}
                   {event.luma_url && (
                     <div className="text-primary truncate">
                       🔗 {event.luma_url}
@@ -278,37 +249,11 @@ export default function EventsPage() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Slug (Auto-generated)</label>
-              <Input
-                placeholder="slug-name"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Event Date</label>
               <Input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Location</label>
-              <Input
-                placeholder="e.g. Munich, Germany"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Description</label>
-              <Input
-                placeholder="Brief summary or description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
               />
             </div>
             <div className="space-y-1">
@@ -361,18 +306,18 @@ export default function EventsPage() {
                 <div className="space-y-1">
                     <label className="text-xs font-semibold text-muted-foreground uppercase">Select Target Event</label>
                     <select
-                        value={testSelectedSlug}
-                        onChange={(e) => setTestSelectedSlug(e.target.value)}
+                        value={testSelectedId}
+                        onChange={(e) => setTestSelectedId(e.target.value)}
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
                         <option value="">Select an event...</option>
                         {events.map((e) => (
-                            <option key={e.slug} value={e.slug}>{e.name}</option>
+                            <option key={e.id} value={e.id}>{e.name}</option>
                         ))}
                     </select>
                 </div>
                 
-                <Button disabled={!testSelectedSlug || testRunning} onClick={handleTestPrompt} className="w-full">
+                <Button disabled={!testSelectedId || testRunning} onClick={handleTestPrompt} className="w-full">
                     {testRunning ? "Generating..." : "Generate Test Messages"}
                 </Button>
                 

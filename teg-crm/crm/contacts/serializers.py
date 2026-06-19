@@ -34,10 +34,14 @@ class ContactSerializer(serializers.ModelSerializer):
         queryset=TeamMember.objects.all(), source="follow_up_owner", write_only=True, required=False, allow_null=True
     )
     rating = RatingSerializer(read_only=True)
+    event = EventSerializer(read_only=True)
+    event_id = serializers.PrimaryKeyRelatedField(
+        queryset=Event.objects.all(), source="event", write_only=True, required=False, allow_null=True
+    )
     
     class Meta:
         model = Contact
         fields = [
             "id", "name", "linkedin_url", "follow_up_owner", "follow_up_owner_id",
-            "follow_up_complete", "rating"
+            "follow_up_complete", "rating", "event", "event_id"
         ]

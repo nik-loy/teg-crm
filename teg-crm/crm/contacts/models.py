@@ -22,6 +22,9 @@ class Event(models.Model):
 class Contact(models.Model):
     name = models.CharField(max_length=255)
     linkedin_url = models.URLField(unique=True, blank=True, null=True)
+    event = models.ForeignKey(
+        Event, on_delete=models.SET_NULL, null=True, blank=True, related_name="contacts"
+    )
     follow_up_owner = models.ForeignKey(
         TeamMember, on_delete=models.SET_NULL, null=True, blank=True, related_name="contacts"
     )

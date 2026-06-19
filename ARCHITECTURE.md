@@ -1,134 +1,66 @@
-# TEG CRM Architecture
+# TEG CRM Backend Architecture
 
-TEG CRM is a monorepo for managing LinkedIn outreach and event-attendee pipelines. It consists of:
+This document provides a comprehensive, code-level architectural reference of the **TEG CRM** backend service (`teg-crm/`). It details the Django API engine, database models, serializers, views, and standalone CLI utilities.
 
-- **[teg-crm/](teg-crm/)** — Django REST API and SQLite persistence
-- **[teg-crm-web/](teg-crm-web/)** — Next.js frontend with a BFF layer and local Gemini integrations
-- **[docker-compose.yml](docker-compose.yml)** — Local deployment of both services with a shared data volume
-
-Both apps read and write the same SQLite database (`data/db.sqlite3`). Optional CLI tools in `teg-crm/src/` operate on that database outside the web stack.
+For a full-stack context, the system consists of a Vite React frontend ([teg-crm-web](file:///d:/TEGProjects/TEGCRM/teg-crm-web/)) communicating with this Django REST API backend via JWT. Both services persist data into a shared SQLite database located at `data/db.sqlite3`.
 
 ---
 
-## 1. Full-stack overview
+## 📂 Backend Directory Tree
 
-Runtime components and how data flows between the browser, Next.js, Django, and external services.
+Below is the file layout of the backend engine:
 
-```mermaid
-%%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'primaryColor': '#ffffff',
-    'primaryTextColor': '#111827',
-    'primaryBorderColor': '#4b5563',
-    'lineColor': '#6b7280',
-    'secondaryColor': '#f9fafb',
-    'tertiaryColor': '#f3f4f6',
-    'textColor': '#111827'
-  }
-}}%%
-flowchart TB
-    subgraph user [User]
-        Browser[Browser]
-    end
-
-    subgraph docker [Docker Compose]
-        subgraph web [teg-crm-web :3000]
-            Pages["App pages<br/>today, contacts, pipeline, events..."]
-            BFF["Next.js API routes<br/>src/app/api/*"]
-            LocalAI["Local Gemini<br/>message, extract, screenshots"]
-        end
-
-        subgraph api [teg-crm :8000]
-            DRF["Django REST API<br/>crm/contacts/views.py"]
-            Admin["Django Admin"]
-        end
-
-        DB[("SQLite<br/>data/db.sqlite3")]
-        Vol["crm-data volume"]
-    end
-
-    subgraph external [External]
-        Gemini["Google Gemini API"]
-    end
-
-    subgraph cli [CLI - optional, same DB]
-        Importers["src/importer/*"]
-        LinkedInTools["src/linkedin/*"]
-        Dashboard["src/dashboard/*"]
-    end
-
-    Browser --> Pages
-    Pages -->|"fetch /api/*"| BFF
-    Pages -->|"backendFetch events"| DRF
-    BFF -->|"BACKEND_URL server-side"| DRF
-    BFF --> LocalAI
-    LocalAI --> Gemini
-    DRF --> Gemini
-    DRF --> DB
-    Admin --> DB
-    DB --- Vol
-    Importers --> DB
-    LinkedInTools --> Gemini
-    LinkedInTools --> DB
-    Dashboard --> DB
+```text
+teg-crm/
+├── crm/                         # Django Project Settings & Application
+│   ├── contacts/                # Core Django App
+│   │   ├── admin.py             # Custom Django admin configurations
+│   │   ├── apps.py              # App config metadata
+│   │   ├── models.py            # Django ORM schema definitions & signals
+│   │   ├── serializers.py       # DRF serializers
+│   │   └── views.py             # REST API views, viewsets, & custom actions
+│   ├── settings.py              # Django settings (JWT, SQLite, CORS)
+│   ├── urls.py                  # API routing definitions
+│   └── wsgi.py                  # WSGI entrypoint
+├── src/                         # Standalone python services & utilities
+│   ├── config.py                # Environment configuration loader
+│   ├── dashboard/               # HTML pipeline dashboard generator
+│   │   ├── generate_dashboard.py
+│   │   └── template.html
+│   ├── importer/                # CSV, Excel & Apify importer scripts
+│   │   ├── apify_importer.py
+│   │   ├── csv_importer.py
+│   │   └── excel_csv_importer.py
+│   └── linkedin/                # LinkedIn automation & message generation
+│       ├── apollo_importer.py
+│       ├── contact_logger.py
+│       ├── message_gen.py
+│       └── outreach_queue.py
+├── config/                      # Local JSON config (team.json)
+├── data/                        # SQLite storage directory (db.sqlite3)
+└── tests/                       # Pytest unit and integration test suites
 ```
 
-### Auth
-
-Two layers protect the app:
-
-1. **App gate** — Shared `APP_PASSWORD` checked by [`teg-crm-web/middleware.ts`](teg-crm-web/middleware.ts); sets an HMAC session cookie (`teg_session`).
-2. **Django JWT** — [`teg-crm-web/src/app/api/auth/login/route.ts`](teg-crm-web/src/app/api/auth/login/route.ts) exchanges credentials for a JWT from Django `/api/auth/login/`; stored in `localStorage` and sent as `Authorization: Bearer …` via [`teg-crm-web/src/lib/backend.ts`](teg-crm-web/src/lib/backend.ts).
-
-### Backend URL split
-
-| Context | Env var | Default (Docker) |
-|---------|---------|------------------|
-| Browser → Django | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` |
-| Next.js server → Django | `BACKEND_URL` | `http://10.89.0.1:8000` (host gateway) |
-
-Most pages call Next `/api/*` routes (BFF), which proxy to Django server-side. The **Events** pages are an exception and call Django directly from the browser via `backendFetch`.
-
-### Frontend Pages and API Connections
-
-The Next.js application (`teg-crm-web/src/app`) consists of the following key pages and API integrations:
-
-| Frontend Page | Path | Next.js API Route (BFF) | Django REST API Endpoint | Description |
-|---|---|---|---|---|
-| **Login** | `/login` | `/api/auth/login` | `api/auth/login/` | User authentication returning a JWT. |
-| **Dashboard** | `/dashboard` | `/api/stats` | `api/contacts/stats/` | Displays overall CRM metrics and aggregations. |
-| **Today** | `/today` | `/api/today`, `/api/contacts` | `api/contacts/` | Daily dashboard for immediate outreach tasks. |
-| **Pipeline** | `/pipeline` | `/api/contacts/list`, `/api/contacts/[id]/stage` | `api/contacts/` | Kanban-style view to move contacts through stages. |
-| **Events List** | `/events` | *Direct via `backendFetch`* | `api/events/` | Lists all TEG conferences and events. |
-| **Event Details** | `/events/[slug]` | *Direct via `backendFetch`* | `api/events/[slug]/` and sub-routes | Shows event details, attendees, and imports leads. |
-| **Contacts** | `/contacts` | `/api/contacts` | `api/contacts/` | Full directory of leads and contacts. |
-| **Contact Detail**| `/contacts/[id]` | `/api/contacts/[id]` | `api/contacts/<id>/` | Deep-dive profile view for a specific contact. |
-| **Messages** | `/messages/[id]` | `/api/message`, `/api/interactions` | `api/contacts/<id>/`, `api/attendances/` | Chat interface to generate and log AI outreach. |
-| **Pending Req.** | `/pending-requests`| `/api/pending-requests/*`, `/api/events` | `api/contacts/`, `api/attendances/` | Bulk import of LinkedIn connection requests. |
-| **Screenshots** | `/screenshots` | `/api/screenshots`, `/api/contacts` | `api/contacts/` | OCR/AI extraction of leads from pasted screenshots. |
-| **Connections** | `/connections` | `/api/connections/create` | `api/contacts/` | Imports bulk LinkedIn connection lists. |
-| **Add Contact** | `/add` | - | - | Manual UI form to add a single contact. |
-
-### System of record
-
-Django/SQLite is the source of truth for contacts, events, attendances, and outreach drafts. Next.js handles UI orchestration, field mapping, and Gemini-powered parsing/generation that may read or write Django data.
-
 ---
 
-## 2. Data model
+## 🛠️ Django REST API Engine (`crm/`)
 
-Core entities defined in [`teg-crm/crm/contacts/models.py`](teg-crm/crm/contacts/models.py).
+The REST API layer is built on **Django** and **Django REST Framework (DRF)**.
 
-| Entity | Role |
-|--------|------|
-| **Contact** | Hub — pipeline stage, outreach status, LinkedIn profile, follow-ups |
-| **Event** | TEG conference — slug, prompts, Luma URL |
-| **Attendance** | Contact ↔ Event join — fit_score, fit_reason |
-| **Interaction** | Activity log on Contact |
-| **Speaker** | Event roster (not in contact pipeline) |
-| **TeamMember** | Internal team config (referenced by string, not FK) |
-| **OutreachDraft** | AI message steps linked to Attendance |
+### 1. Project Configurations
+
+* **[settings.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/settings.py)**:
+  - **Database Persistence**: Configures the default SQLite database engine mapping to `data/db.sqlite3`. Under Docker environment, this maps to a shared, persistent container volume to prevent data loss.
+  - **SimpleJWT Auth**: Integrates `rest_framework_simplejwt` to secure all REST endpoints. The authorization header type is configured as `Bearer` with a default 30-day token lifetime.
+  - **CORS Management**: Includes `corsheaders` middleware allowing cross-origin resource sharing from the React frontend SPA.
+  - **Gemini Key**: Resolves the `GEMINI_API_KEY` from environment variables for automated messaging.
+* **[urls.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/urls.py)**:
+  - Exposes Django Admin on `/admin/`.
+  - Configures explicit REST url endpoints by binding viewset actions to HTTP methods.
+
+### 2. Core CRM Models ([models.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py))
+
+The database schema reflects the CRM pipeline entities.
 
 ```mermaid
 %%{init: {
@@ -147,42 +79,57 @@ classDiagram
     class Contact {
         +int id
         +string name
-        +string linkedin_url
+        +string linkedin_url [unique]
         +string job_title
         +string company_name
-        +string tier
-        +string pipeline_stage
-        +string outreach_status
+        +string tier [Tier.choices]
+        +string pipeline_stage [PipelineStage.choices]
+        +string source [ContactSource.choices]
+        +string outreach_status [OutreachStatus.choices]
+        +string outreach_owner
         +date last_contact_date
         +date follow_up_due_date
+        +string follow_up_owner
+        +bool follow_up_complete
+        +text profile_summary
+        +string location
+        +text experience
+        +text education
+        +text about
+        +bool open_to_work
+        +string connection_degree
     }
 
     class Event {
         +int id
         +string name
-        +string slug
+        +string slug [unique]
         +date date
         +string location
         +string luma_url
-        +string outreach_prompt
+        +text outreach_prompt
+        +text fit_scoring_prompt
+        +bool is_active
     }
 
     class Attendance {
         +int id
-        +Contact contact
-        +Event event
+        +Contact contact [FK]
+        +Event event [FK]
         +bool attended
         +int fit_score
-        +string fit_reason
+        +text fit_reason
+        +datetime registered_at
     }
 
     class Interaction {
         +int id
-        +Contact contact
+        +Contact contact [FK]
         +string summary
-        +string interaction_type
+        +string interaction_type [InteractionType.choices]
         +date date
-        +string notes
+        +text next_action
+        +text notes
     }
 
     class Speaker {
@@ -190,22 +137,32 @@ classDiagram
         +string name
         +string company
         +string title
-        +Event event
+        +Event event [FK]
+        +string linkedin_url
+        +text bio
+        +bool confirmed
     }
 
     class TeamMember {
         +int id
         +string name
-        +string email
+        +string email [unique]
         +string utm_source
+        +bool is_active
     }
 
     class OutreachDraft {
         +int id
-        +Attendance attendance
+        +Attendance attendance [FK]
         +int step_number
-        +string generated_text
-        +string status
+        +text generated_text
+        +string status [Status.choices]
+    }
+
+    class RawProfileData {
+        +int id
+        +Contact contact [OneToOne]
+        +text raw_text
     }
 
     Contact "1" --* "many" Attendance : has
@@ -213,124 +170,94 @@ classDiagram
     Contact "1" --* "many" Interaction : logs
     Event "1" --* "many" Speaker : features
     Attendance "1" --* "many" OutreachDraft : drafts
+    Contact "1" --o "1" RawProfileData : references
 ```
 
-### Relationships
+#### Code-Level Data Details & Signals
+- **[Contact](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L63)**: Represents an outreach prospect. It has choices for [Tier](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L35) (Tier 1-3), [PipelineStage](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L27) (Awareness, First Attendance, Engaged, Deepening, Activated), and [OutreachStatus](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L19) (Request Sent, Connected, Messaged, No Response, Withdrawn).
+- **[Attendance](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L141)**: Captures many-to-many linkages between contacts and events. It stores AI-generated `fit_score` ratings (1-5 scale) and the corresponding `fit_reason`.
+- **[post_save Signal (`score_attendance`)](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py#L237)**: Automatically triggered upon creating an `Attendance` record. If the associated event specifies a `fit_scoring_prompt`, the backend executes an asynchronous call to Google Gemini (`gemini-2.5-flash`) using the contact's parsed profile details to predict a fit score and output a rationale back to `Attendance`.
 
-- Contact 1→* Attendance ←* 1 Event
-- Contact 1→* Interaction
-- Event 1→* Speaker
-- Attendance 1→* OutreachDraft
+### 3. API Views & Custom Actions ([views.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py))
 
-`TeamMember` is loaded from `config/team.json` and referenced on contacts by string fields (e.g. `outreach_owner`), not foreign keys.
+Backend APIs are exposed through DRF generic viewsets extending `viewsets.ModelViewSet`:
 
-### REST API coverage
+* **[LoginView](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L26)**: Exposes credentials authentication. It matches a static password configuration for backend console/panel access, returning JWT access and refresh tokens.
+* **[EventViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L48)**: Manages CRM events keyed by unique slugs.
+  - `@action import_leads`: Initiates bulk contact/attendee parsing from uploaded CSV or Excel spreadsheets using backend helper methods.
+  - `@action test_prompt`: Generates 5 sample AI outreach variations for a mock contact to preview output quality for that event's prompt templates.
+* **[AttendanceViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L120)**: Implements attendance lookups.
+  - `@action generate_message`: Executes Gemini queries to produce personalized German LinkedIn messages based on outreach templates and contact properties. Disqualifies leads with a fit score of 2 or lower.
+* **[ContactViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L186)**: Implements contacts CRUD, search filtering, and state mapping.
+  - `@action extract_profile`: Accepts raw copy-pasted LinkedIn text from the browser extension, executes a zero-shot parsing instruction with Gemini, and returns structured profile parameters in strict JSON.
+  - `@action enrich`: Stores raw profile data to `RawProfileData` and triggers the AI fit scorer on associated event attendances.
+  - `@action export`: Packages matching contact listings into a downloadable Excel workbook spreadsheet (`openpyxl`).
 
-The Django backend serves as a robust REST API over the SQLite database. Endpoints are defined using Django REST Framework (DRF) viewsets and routed via [`teg-crm/crm/urls.py`](teg-crm/crm/urls.py). 
+### 4. Serializers ([serializers.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py))
 
-**Available REST Endpoints:**
-
-| Resource | Endpoints | Capabilities |
-|---|---|---|
-| **Auth** | `api/auth/login/` | JWT token generation using SimpleJWT. |
-| **Events** | `api/events/` | List, create, retrieve, update, and delete events. |
-| | `api/events/<slug>/import_leads/` | Bulk import contacts from external sources (e.g., CSV) directly to an event. |
-| | `api/events/<slug>/attendances/` | Retrieve a list of attendees for a specific event. |
-| | `api/events/<slug>/drafts/` | Retrieve outreach drafts specifically created for this event. |
-| **Attendances** | `api/attendances/` | List and retrieve attendance relationship records. |
-| | `api/attendances/<pk>/generate_message/` | Trigger Gemini-based AI generation for a personalized outreach message. |
-| **Drafts** | `api/drafts/` | Create, list, retrieve, update, and delete generated outreach drafts. |
-| **Contacts** | `api/contacts/` | Full CRUD operations for contacts (list, create, detail view, etc.). |
-| | `api/contacts/stats/` | Aggregated statistical data used by the dashboard. |
-| | `api/contacts/extract_profile/` | Helper endpoint to parse unstructured data (screenshots/text) into structured contact profiles. |
-
-**Admin only (no REST endpoints yet):** `Interaction`, `Speaker`, `TeamMember`.
-
-### Pipeline stages
-
-Awareness → First Attendance → Engaged → Deepening → Activated
+* **[EventSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L4)**: Serializes basic details, leaving primary keys read-only.
+* **[ContactSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L14)**: Emits profile details. It includes custom fields representing related event lists.
+* **[AttendanceSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L28)**: Wraps associated contacts in nested format for dashboard loading.
 
 ---
 
-## 3. LinkedIn outreach workflow
+## ⚙️ Standalone Services & CLI Scripts (`src/`)
 
-End-to-end flow covering web UI paths and CLI tools. Both write to the same SQLite database.
+Python utility packages operated outside the HTTP server context.
+
+### 1. Configuration Management
+* **[config.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/config.py)**: Configures credentials and environment settings. Parses internal sales team information from `config/team.json`, establishing UTM tracking IDs for invitation URLs.
+
+### 2. Lead Importers (`src/importer/`)
+Parses incoming prospect listings from spreadsheets.
 
 ```mermaid
-%%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'primaryColor': '#ffffff',
-    'primaryTextColor': '#111827',
-    'primaryBorderColor': '#4b5563',
-    'lineColor': '#6b7280',
-    'secondaryColor': '#f9fafb',
-    'tertiaryColor': '#f3f4f6',
-    'textColor': '#111827'
-  }
-}}%%
 flowchart TD
-    subgraph intake [Lead intake]
-        Apollo["Apollo CSV"]
-        Apify["Apify CSV"]
-        Paste["Paste profile / screenshot"]
-        Manual["Manual add"]
-    end
-
-    subgraph import [Import layer]
-        CLIImp["src/importer/*<br/>src/linkedin/apollo_importer"]
-        WebExtract["Web: /api/extract<br/>/api/screenshots<br/>/api/pending-requests"]
-        EventImport["Event import_leads API"]
-    end
-
-    DB[("SQLite Contact + Attendance")]
-
-    subgraph personalize [Personalization]
-        MsgGenCLI["src/linkedin/message_gen.py"]
-        MsgGenWeb["Web: /api/message, /api/followup"]
-        Gemini["Google Gemini"]
-    end
-
-    subgraph outreach [Outreach execution]
-        Today["Today view buckets"]
-        Queue["Outreach queue CLI"]
-        MarkSent["Mark messaged / log interaction"]
-    end
-
-    Apollo --> CLIImp
-    Apify --> CLIImp
-    Paste --> WebExtract
-    Manual --> WebExtract
-    CLIImp --> DB
-    WebExtract --> DB
-    EventImport --> DB
-    DB --> MsgGenCLI
-    DB --> MsgGenWeb
-    MsgGenCLI --> Gemini
-    MsgGenWeb --> Gemini
-    Gemini --> MsgGenCLI
-    Gemini --> MsgGenWeb
-    DB --> Today
-    DB --> Queue
-    Today --> MarkSent
-    MarkSent --> DB
+    Apify[Apify LinkedIn Scraper CSV] -->|apify_importer.py| Parser
+    Spreadsheet[General CSV / Excel] -->|excel_csv_importer.py / csv_importer.py| Parser
+    Parser{Parse Records} -->|Validate & Deduplicate| DB[("SQLite DB")]
+    DB -->|Trigger Signal| FitScorer["Gemini Fit Scorer"]
+    FitScorer -->|Save Score & Reason| DB
 ```
 
-### Typical paths
+* **[apify_importer.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/importer/apify_importer.py)**: Imports scraped LinkedIn details (about, job title, summary, location).
+* **[csv_importer.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/importer/csv_importer.py)**: Parses columns to update or build contact records.
+* **[excel_csv_importer.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/importer/excel_csv_importer.py)**: Normalizes incoming file layouts to route execution paths.
 
-| Step | Web | CLI |
-|------|-----|-----|
-| Import leads | `/add`, `/pending-requests`, `/screenshots`, Events import | `apollo_importer.py`, `apify_importer.py`, `csv_importer.py` |
-| Generate message | `/messages`, `/api/message` | `message_gen.py` |
-| Review queue | `/today`, `/pipeline` | `outreach_queue.py` |
-| Log sent message | `/api/messages/mark-messaged` | `message_gen.py` (logs Interaction) |
-| Dashboard | `/dashboard` | `generate_dashboard.py` → static HTML |
+### 3. LinkedIn Automation (`src/linkedin/`)
+CLI scripts to drive outreach.
 
-Outreach status progresses through: Request Sent → Connected → Messaged → No Response / Withdrawn.
+* **[apollo_importer.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/linkedin/apollo_importer.py)**: Special CSV parser supporting blocklists (e.g. ignoring competitors) and deduplication.
+* **[contact_logger.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/linkedin/contact_logger.py)**: Terminal utility that accepts a LinkedIn URL and raw details, writing them to SQLite.
+* **[message_gen.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/linkedin/message_gen.py)**: Orchestrates terminal-based outreach. It queries Gemini using a strict system prompt, checks seniority warnings (e.g. recommending Executive tickets for Directors/VPs), structures Du/Sie pronoun decisions, and prompts the user to approve logging the message to `Interaction` tables.
 
----
+```mermaid
+sequenceDiagram
+    actor CLI/User
+    participant message_gen as message_gen.py
+    participant DB as SQLite DB
+    participant LLM as Google Gemini API
 
-## Related docs
+    CLI/User->>message_gen: Run with url & owner params
+    message_gen->>DB: Query Contact by URL
+    DB-->>message_gen: Return Contact object
+    CLI/User->>message_gen: Paste raw LinkedIn text profile
+    message_gen->>LLM: Send system instructions & raw profile
+    LLM-->>message_gen: Return fit evaluation & message variants
+    message_gen->>CLI/User: Display evaluation & message
+    rect green
+        CLI/User->>message_gen: User approves message
+        message_gen->>DB: Log Interaction record
+        message_gen->>DB: Update outreach_status to "Messaged"
+    end
+```
 
-- [teg-crm/STRUCTURE.md](teg-crm/STRUCTURE.md) — Backend directory tree and module details
-- [docker-compose.yml](docker-compose.yml) — Local deployment (Podman/Docker)
+### 4. Static Dashboard Generation (`src/dashboard/`)
+* **[generate_dashboard.py](file:///d:/TEGProjects/TEGCRM/teg-crm/src/dashboard/generate_dashboard.py)**: Runs queries against the SQLite database, compiles total aggregates, and compiles variables into `template.html` to generate a static pipeline dashboard.
+
+```mermaid
+flowchart LR
+    DB[("SQLite DB")] -->|Query aggregates| Generator[generate_dashboard.py]
+    Template[template.html] -->|Render template| Generator
+    Generator -->|Output| Dashboard[dashboard.html]
+```

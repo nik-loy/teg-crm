@@ -1,45 +1,43 @@
 from rest_framework import serializers
-from .models import Event, Contact, Attendance, OutreachDraft
+from .models import Event, Contact, TeamMember, RawProfileData, Rating
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
-            "id", "name", "slug", "date", "location", "description", 
-            "luma_url", "is_active", "outreach_prompt", "fit_scoring_prompt", "created_at"
+            "id", "name", "date", "luma_url", "outreach_prompt", "fit_scoring_prompt"
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id"]
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamMember
+        fields = ["id", "name"]
+
+
+class RatingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Rating
+        fields = ["score", "reason"]
+
+
+class RawProfileDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RawProfileData
+        fields = ["raw_text"]
 
 
 class ContactSerializer(serializers.ModelSerializer):
-    events = serializers.SerializerMethodField()
-
+    follow_up_owner = TeamMemberSerializer(read_only=True)
+    follow_up_owner_id = serializers.PrimaryKeyRelatedField(
+        queryset=TeamMember.objects.all(), source="follow_up_owner", write_only=True, required=False, allow_null=True
+    )
+    rating = RatingSerializer(read_only=True)
+    
     class Meta:
         model = Contact
-        fields = "__all__"
-
-    def get_events(self, obj):
-        return list(obj.attendances.values_list("event__name", flat=True))
-
-
-
-class AttendanceSerializer(serializers.ModelSerializer):
-    contact = ContactSerializer(read_only=True)
-    
-    class Meta:
-        model = Attendance
         fields = [
-            "id", "contact", "event", "fit_score", "fit_reason", 
-            "attended", "registered_at"
-        ]
-
-
-class OutreachDraftSerializer(serializers.ModelSerializer):
-    attendance = AttendanceSerializer(read_only=True)
-    
-    class Meta:
-        model = OutreachDraft
-        fields = [
-            "id", "attendance", "step_number", "generated_text", 
-            "status", "created_at", "updated_at"
+            "id", "name", "linkedin_url", "follow_up_owner", "follow_up_owner_id",
+            "follow_up_complete", "rating"
         ]

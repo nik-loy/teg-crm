@@ -16,34 +16,13 @@ export interface Contact {
   id: string;
   name: string;
   linkedinUrl: string;
-  jobTitle: string;
-  company: string;
-  companyId?: string;
-  tier: string;
-  pipelineStage: PipelineStage | string;
-  outreachStatus: OutreachStatus | string;
-  outreachOwner: string;
-  lastContactDate: string;
-  followUpDueDate: string;
   followUpOwner: string;
+  followUpOwnerId?: string;
   followUpComplete: boolean;
-  notes: string;
-  profileSummary?: string;
-  location?: string;
-  experience?: string;
-  education?: string;
-  personalizationSignals?: string;
-  events?: string[];
-  // Enrichment fields for personalised outreach
-  about?: string;
-  mutualConnections?: string;
-  openToWork?: boolean;
-  connectionDegree?: string;
-  languages?: string;
-  organizations?: string;
-  certifications?: string;
-  website?: string;
-  keyAchievements?: string;
+  rating?: {
+    score: number;
+    reason: string;
+  };
 }
 
 export interface EventRecord {

@@ -35,32 +35,13 @@ export function djangoToFrontendContact(d: any): Contact {
     id: String(d.id),
     name: d.name || "",
     linkedinUrl: d.linkedin_url || "",
-    jobTitle: d.job_title || "",
-    company: d.company_name || "",
-    tier: d.tier || "Tier 3",
-    pipelineStage: d.pipeline_stage || "Awareness",
-    outreachStatus: d.outreach_status || "",
-    outreachOwner: d.outreach_owner || "",
-    lastContactDate: d.last_contact_date || "",
-    followUpDueDate: d.follow_up_due_date || "",
-    followUpOwner: d.follow_up_owner || "",
-    followUpComplete: d.follow_up_complete || false,
-    notes: d.notes || "",
-    profileSummary: d.profile_summary || "",
-    location: d.location || "",
-    experience: d.experience || "",
-    education: d.education || "",
-    personalizationSignals: d.personalization_signals || "",
-    events: d.events || [],
-    about: d.about || "",
-    mutualConnections: d.mutual_connections || "",
-    openToWork: d.open_to_work || false,
-    connectionDegree: d.connection_degree || "",
-    languages: d.languages || "",
-    organizations: d.organizations || "",
-    certifications: d.certifications || "",
-    website: d.website || "",
-    keyAchievements: d.key_achievements || "",
+    followUpOwner: d.follow_up_owner ? d.follow_up_owner.name : "",
+    followUpOwnerId: d.follow_up_owner ? String(d.follow_up_owner.id) : undefined,
+    followUpComplete: !!d.follow_up_complete,
+    rating: d.rating ? {
+      score: d.rating.score,
+      reason: d.rating.reason
+    } : undefined
   };
 }
 
@@ -85,26 +66,9 @@ export async function getTodayBuckets(owner?: string) {
   const today = new Date().toISOString().split("T")[0];
 
   for (const c of contacts) {
-    if (c.outreachStatus === "Replied" && !c.followUpComplete) {
-      buckets.replies.push(c);
-      continue;
-    }
-    if (c.outreachStatus === "Messaged" && c.followUpDueDate && c.followUpDueDate <= today && !c.followUpComplete) {
+    if (!c.followUpComplete) {
       buckets.dueFollowups.push(c);
-      continue;
-    }
-    if (c.outreachStatus === "Request Sent") {
-      const sentDate = c.lastContactDate;
-      if (sentDate) {
-        const diff = Date.now() - new Date(sentDate).getTime();
-        const days = diff / (1000 * 60 * 60 * 24);
-        if (days > 14) {
-          buckets.staleRequests.push(c);
-          continue;
-        }
-      }
-    }
-    if (c.outreachStatus === "Connected" || c.outreachStatus === "Accepted") {
+    } else {
       buckets.noMessage.push(c);
     }
   }

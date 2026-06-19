@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy all source files first so pip install . can find the package directories
 COPY . .
 
-# Install python package and dependencies
-RUN pip install --no-cache-dir .
+# Install python package and dependencies including dev (for tests)
+RUN pip install --no-cache-dir ".[dev]"
 
 # Expose port
 EXPOSE 8000

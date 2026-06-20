@@ -149,6 +149,7 @@ Backend APIs are exposed through DRF generic viewsets extending `viewsets.ModelV
   - `@action enrich` (POST `/api/contacts/enrich/`): Saves raw copied profile text to `RawProfileData` and triggers the AI fit scorer.
   - `@action generate_message` (POST `/api/contacts/<int:pk>/generate_message/`): Invokes Gemini to generate 3 personalized outreach message variants based on the event's outreach prompt and contact properties.
   - `@action save_message` (POST `/api/contacts/<int:pk>/save_message/`): Stores the user-accepted outreach message draft into the `SavedMessage` table.
+  - `@action export` (GET `/api/contacts/export/`): Compiles an `.xlsx` file using `openpyxl` containing sheets for events and contacts (with their AI ratings and saved messages), and returns it as a downloadable attachment.
 
 ### 4. Serializers ([serializers.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py))
 
@@ -231,7 +232,7 @@ The CRM user interface is built as a Single Page Application (SPA) using **React
 ### 1. SPA Client Configuration & Security
 
 * **Routing Setup ([App.tsx](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/App.tsx))**: Operates `react-router-dom` for client-side routing. Authenticated pages are wrapped in a `<RequireAuth>` guard which checks for a stored JWT before rendering, redirecting unauthenticated users to `/login`.
-* **Authenticated Layout ([layout.tsx](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/pages/layout.tsx))**: Wraps the screen viewports with a desktop sidebar navigation panel and a mobile-friendly bottom nav bar. Provides shortcuts to all major tools and an external link to the Django admin panel dashboard.
+* **Authenticated Layout ([layout.tsx](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/pages/layout.tsx))**: Wraps the screen viewports with a desktop sidebar navigation panel and a mobile-friendly bottom nav bar. Provides shortcuts to all major tools and an external link to the Django admin panel dashboard. It also includes an **Export Leads** button which securely fetches an `.xlsx` database dump from the backend using the JWT token and triggers a programmatic file download.
 * **REST API Middleware Client ([backend.ts](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/lib/backend.ts))**: Exposes the `backendFetch` wrapper utility. In the browser, it retrieves a relative API URL (`/api/...`) so that requests are proxied via the Vite server to the backend service. It automatically injects the stored JWT token as an HTTP `Authorization` header (`Bearer <token>`). If the backend returns a `401 Unauthorized` response, `backendFetch` invalidates the session credentials locally and redirects the user to `/login`.
 
 ### 2. UI Routing & Component Structure

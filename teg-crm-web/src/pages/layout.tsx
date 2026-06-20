@@ -33,6 +33,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     navigate("/login");
   }
 
+  async function handleExportLeads() {
+    const token = localStorage.getItem("teg_jwt");
+    if (!token) {
+      alert("You must be logged in to export leads.");
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const res = await fetch(`${backendUrl}/api/contacts/export/`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error("Failed to export leads.");
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "leads_export.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Error exporting leads");
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar — desktop only */}
@@ -60,13 +93,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="border-t p-4 space-y-2">
-          <a
-            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/contacts/export/` : "http://localhost:8000/api/contacts/export/"}
+          <button
+            onClick={handleExportLeads}
             className={buttonVariants({ variant: "ghost", size: "sm" }) + " w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground flex items-center"}
           >
             <Download className="mr-3 h-4 w-4" />
             Export Leads
-          </a>
+          </button>
           <a
             href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
             target="_blank"
@@ -91,13 +124,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 inset-x-0 h-14 border-b bg-background flex items-center justify-between px-4 z-10">
         <span className="font-semibold">TEG CRM</span>
         <div className="flex items-center gap-1">
-          <a
-            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/contacts/export/` : "http://localhost:8000/api/contacts/export/"}
+          <button
+            onClick={handleExportLeads}
             title="Export Leads"
             className={buttonVariants({ variant: "ghost", size: "icon" })}
           >
             <Download className="h-5 w-5" />
-          </a>
+          </button>
           <a
             href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
             target="_blank"

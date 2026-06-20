@@ -85,10 +85,16 @@ test.describe("TEG CRM Sidebar Navigation", () => {
     await cleanupDialog.accept();
   });
 
-  test("Export Leads link has correct href", async ({ page }) => {
-    // Click the Export Leads link in the sidebar
-    const exportLink = page.locator("aside").getByRole("link", { name: "Export Leads" });
-    await expect(exportLink).toHaveAttribute("href", /.*\/api\/contacts\/export\//);
+  test("triggers Export Leads download", async ({ page }) => {
+    // Start waiting for download before clicking
+    const downloadPromise = page.waitForEvent('download');
+    
+    // Click the Export Leads button in the sidebar
+    const exportBtn = page.locator("aside").getByRole("button", { name: "Export Leads" });
+    await exportBtn.click();
+    
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("leads_export.xlsx");
   });
 });
 

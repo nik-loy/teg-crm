@@ -31,6 +31,7 @@ export default function PendingRequestsPage() {
   const [checkingDupes, setCheckingDupes] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [events, setEvents] = useState<{id: number, name: string}[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{id: number, name: string}[]>([]);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<CreateResult | null>(null);
 
@@ -45,6 +46,14 @@ export default function PendingRequestsPage() {
         setEvents(results.map((e: any) => ({ id: e.id, name: e.name })));
       })
       .catch(() => {/* silently fail — user can still type */});
+
+    backendFetch("/api/team-members/")
+      .then((r) => r.json())
+      .then((d) => {
+        const results = Array.isArray(d) ? d : (d.results || []);
+        setTeamMembers(results.map((m: any) => ({ id: m.id, name: m.name })));
+      })
+      .catch(() => {});
   }, []);
 
   function handleOwnerChange(v: string) {
@@ -74,7 +83,7 @@ export default function PendingRequestsPage() {
             currentName = line;
         } else if (!currentHeadline) {
             currentHeadline = line;
-            requests.push({ name: currentName, headline: currentHeadline, sentDaysAgo: 1 });
+            requests.push({ name: currentName, headline: currentHeadline });
             currentName = null;
             currentHeadline = null;
         }
@@ -99,7 +108,7 @@ export default function PendingRequestsPage() {
                  const data = await res.json();
                  const results = Array.isArray(data) ? data : (data.results || []);
                  if (results.length > 0) {
-                     foundDupes.push({ name: req.name, owner: results[0].outreach_owner });
+                     foundDupes.push({ name: req.name, owner: results[0].follow_up_owner ? results[0].follow_up_owner.name : "" });
                  }
              }
           }
@@ -124,12 +133,9 @@ export default function PendingRequestsPage() {
     if (!parseResult?.requests.length || !owner || !selectedEventId) return;
     setCreating(true);
     try {
-      const token = localStorage.getItem("teg_jwt");
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-      };
-      
+      const selectedOwnerObj = teamMembers.find((t) => t.name === owner);
+      const followUpOwnerId = selectedOwnerObj ? selectedOwnerObj.id : null;
+
       let created = 0;
       let skipped = 0;
       let failed = 0;
@@ -150,10 +156,9 @@ export default function PendingRequestsPage() {
               },
               body: JSON.stringify({
                   name: req.name,
-                  job_title: req.headline,
-                  outreach_owner: owner,
-                  event_id: selectedEventId,
-                  source: "LinkedIn"
+                  profile_headline: req.headline,
+                  follow_up_owner_id: followUpOwnerId,
+                  event_id: selectedEventId
               })
           });
           
@@ -344,9 +349,6 @@ export default function PendingRequestsPage() {
                             </p>
                             <p className="text-xs text-muted-foreground truncate pl-5">
                               {req.headline}
-                            </p>
-                            <p className="text-xs text-muted-foreground pl-5">
-                              Sent {req.sentDaysAgo} day{req.sentDaysAgo !== 1 ? "s" : ""} ago
                             </p>
                           </div>
                           {dupe && (

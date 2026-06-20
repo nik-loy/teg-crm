@@ -1,6 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
-export default defineConfig({
+console.log("--- DEBUG PLAYWRIGHT CONFIG ---");
+console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is:", process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);
+console.log("-------------------------------");
+
+const config = defineConfig({
   testDir: "./e2e",
   timeout: 30000,
   fullyParallel: false,
@@ -16,7 +20,16 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { 
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        },
+      },
     },
   ],
 });
+
+console.log("RESOLVED PROJECTS:", JSON.stringify(config.projects));
+
+export default config;

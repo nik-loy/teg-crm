@@ -86,14 +86,40 @@ function VariantCard({
   angle,
   initialText,
   fit,
+  contactId,
 }: {
   index: number;
   angle: string;
   initialText: string;
   fit: number;
+  contactId: string;
 }) {
   const [text, setText] = useState(initialText);
   const charCount = text.length;
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleAccept() {
+    setSaving(true);
+    try {
+      const res = await backendFetch(`/api/contacts/${contactId}/save_message/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message_text: text }),
+      });
+      if (res.ok) {
+        setSaved(true);
+      } else {
+        alert("Failed to save message");
+      }
+    } catch (e) {
+      alert("Error saving message");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <Card>
@@ -112,6 +138,15 @@ function VariantCard({
         <CharBar count={charCount} />
         <div className="flex items-center gap-2">
           <CopyButton text={text} />
+          <Button size="sm" variant={saved ? "secondary" : "default"} onClick={handleAccept} disabled={saving || saved}>
+            {saving ? (
+              <><Loader2 className="size-3.5 mr-1.5 animate-spin" /> Saving</>
+            ) : saved ? (
+              <><CheckCheck className="size-3.5 mr-1.5 text-green-600" /> Accepted</>
+            ) : (
+              "Accept"
+            )}
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -190,6 +225,7 @@ function MessageInner({ contactId }: { contactId: string }) {
               angle={v.angle}
               initialText={v.text}
               fit={parsed.fit}
+              contactId={contactId}
             />
           ))}
         </>

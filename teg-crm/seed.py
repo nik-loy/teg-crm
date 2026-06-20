@@ -8,8 +8,10 @@ from crm.contacts.models import TeamMember, Event, Contact, RawProfileData, Rati
 
 def seed():
     # Create Team Members
-    tm1, _ = TeamMember.objects.get_or_create(name="Alice Smith")
-    tm2, _ = TeamMember.objects.get_or_create(name="Bob Johnson")
+    tm1, _ = TeamMember.objects.get_or_create(name="Jonas Böhrer")
+    tm2, _ = TeamMember.objects.get_or_create(name="Abdul Aljubahji")
+    tm3, _ = TeamMember.objects.get_or_create(name="Markus Ramsauer")
+    tm4, _ = TeamMember.objects.get_or_create(name="Niklas Loycke")
 
     # Create Events
     e1, _ = Event.objects.get_or_create(
@@ -25,7 +27,8 @@ def seed():
         name="John Doe",
         linkedin_url="https://linkedin.com/in/johndoe",
         follow_up_owner=tm1,
-        follow_up_complete=False
+        follow_up_complete=False,
+        event=e1
     )
     
     # Create RawProfileData for Contact 1
@@ -45,7 +48,8 @@ def seed():
         name="Jane Roe",
         linkedin_url="https://linkedin.com/in/janeroe",
         follow_up_owner=tm2,
-        follow_up_complete=True
+        follow_up_complete=True,
+        event=e1
     )
     
     RawProfileData.objects.get_or_create(

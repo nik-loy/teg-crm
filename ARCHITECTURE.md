@@ -80,6 +80,7 @@ classDiagram
         +int id
         +string name
         +string linkedin_url [unique]
+        +string profile_headline
         +Event event [FK]
         +TeamMember follow_up_owner [FK]
         +bool follow_up_complete
@@ -88,21 +89,15 @@ classDiagram
     class Event {
         +int id
         +string name
-        +string slug [unique]
         +date date
-        +string location
         +string luma_url
         +text outreach_prompt
         +text fit_scoring_prompt
-        +bool is_active
     }
 
     class TeamMember {
         +int id
         +string name
-        +string email [unique]
-        +string utm_source
-        +bool is_active
     }
 
     class RawProfileData {
@@ -118,38 +113,51 @@ classDiagram
         +text reason
     }
 
+    class SavedMessage {
+        +int id
+        +Contact contact [FK]
+        +text message_text
+        +datetime created_at
+    }
+
     Event "1" --* "many" Contact : has
     TeamMember "1" --* "many" Contact : owns follow-up
     Contact "1" --o "1" RawProfileData : references
     Contact "1" --o "1" Rating : has
+    Contact "1" --* "many" SavedMessage : has saved messages
 ```
 
 #### Code-Level Data Details & Signals
-- **[Contact](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Represents an outreach prospect. Contains fields for the LinkedIn URL, an associated `Event`, and a `TeamMember` responsible for follow-up.
-- **[Event](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores details about CRM events. Contacts are linked directly to events via a foreign key.
+- **[Contact](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Represents an outreach prospect. Contains fields for the LinkedIn URL, headline, associated `Event`, a `TeamMember` responsible for follow-up, and a flag indicating whether the follow-up is complete.
+- **[Event](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores details about CRM events, including Luma links and dynamic AI prompts for scoring and message generation.
+- **[TeamMember](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Represents an internal team member who owns prospect follow-ups.
+- **[RawProfileData](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores the raw copy-pasted LinkedIn profile data text associated with a contact.
 - **[Rating](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores AI-generated `score` ratings (1-5 scale) and the corresponding `reason` for the contact.
-- **Asynchronous Scoring**: Triggered upon profile enrichment. The backend executes an asynchronous call to Google Gemini (`gemini-2.5-flash`) using the contact's parsed profile details to predict a fit score and output a rationale.
+- **[SavedMessage](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/models.py)**: Stores the outreach messages accepted/saved by users for contact follow-up.
+- **Asynchronous Scoring**: Triggered upon profile enrichment. The backend runs the scoring logic calling Google Gemini (`gemini-2.5-flash`) using the contact's parsed profile details to predict a fit score and output a rationale.
 
 ### 3. API Views & Custom Actions ([views.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py))
 
 Backend APIs are exposed through DRF generic viewsets extending `viewsets.ModelViewSet`:
 
-* **[LoginView](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L26)**: Exposes credentials authentication. It matches a static password configuration for backend console/panel access, returning JWT access and refresh tokens.
-* **[EventViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L48)**: Manages CRM events keyed by unique slugs.
-  - `@action import_leads`: Initiates bulk contact/attendee parsing from uploaded CSV or Excel spreadsheets using backend helper methods.
-  - `@action test_prompt`: Generates 5 sample AI outreach variations for a mock contact to preview output quality for that event's prompt templates.
-* **[AttendanceViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L120)**: Implements attendance lookups.
-  - `@action generate_message`: Executes Gemini queries to produce personalized German LinkedIn messages based on outreach templates and contact properties. Disqualifies leads with a fit score of 2 or lower.
-* **[ContactViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L186)**: Implements contacts CRUD, search filtering, and state mapping.
-  - `@action extract_profile`: Accepts raw copy-pasted LinkedIn text from the browser extension, executes a zero-shot parsing instruction with Gemini, and returns structured profile parameters in strict JSON.
-  - `@action enrich`: Stores raw profile data to `RawProfileData` and triggers the AI fit scorer on associated event attendances.
-  - `@action export`: Packages matching contact listings into a downloadable Excel workbook spreadsheet (`openpyxl`).
+* **[LoginView](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L104)**: Exposes credentials authentication. It matches a static password configuration for backend console/panel access, returning JWT access and refresh tokens.
+* **[EventViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L129)**: Manages CRM events.
+  - `@action attendances` (GET `/api/events/<int:pk>/attendances/`): Lists all contacts registered/associated with the specific event along with their rating score and details.
+* **[TeamMemberViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L157)**: Manages CRM team members.
+* **[ContactViewSet](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/views.py#L162)**: Implements contacts CRUD, search filtering, and AI operations.
+  - `@action stats` (GET `/api/contacts/stats/`): Calculates contact statistics (totals, stages, tiers).
+  - `@action enrich` (POST `/api/contacts/enrich/`): Saves raw copied profile text to `RawProfileData` and triggers the AI fit scorer.
+  - `@action generate_message` (POST `/api/contacts/<int:pk>/generate_message/`): Invokes Gemini to generate 3 personalized outreach message variants based on the event's outreach prompt and contact properties.
+  - `@action save_message` (POST `/api/contacts/<int:pk>/save_message/`): Stores the user-accepted outreach message draft into the `SavedMessage` table.
 
 ### 4. Serializers ([serializers.py](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py))
 
-* **[EventSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L4)**: Serializes basic details, leaving primary keys read-only.
-* **[ContactSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L14)**: Emits profile details. It includes custom fields representing related event lists.
-* **[AttendanceSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L28)**: Wraps associated contacts in nested format for dashboard loading.
+* **[EventSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L4)**: Serializes basic event details.
+* **[TeamMemberSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L13)**: Serializes team member fields.
+* **[RatingSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L19)**: Serializes rating scores and reasons.
+* **[RawProfileDataSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L25)**: Serializes profile raw texts.
+* **[SavedMessageSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L31)**: Serializes user-accepted messages.
+* **[ContactSerializer](file:///d:/TEGProjects/TEGCRM/teg-crm/crm/contacts/serializers.py#L38)**: Emits complete contact details, including nested fields for `rating`, `event`, and a list of `saved_messages`.
 
 ---
 
@@ -213,3 +221,198 @@ flowchart LR
     Template[template.html] -->|Render template| Generator
     Generator -->|Output| Dashboard[dashboard.html]
 ```
+
+---
+
+## 💻 Frontend Client Architecture (`teg-crm-web/`)
+
+The CRM user interface is built as a Single Page Application (SPA) using **React**, **Vite**, and **TypeScript**.
+
+### 1. SPA Client Configuration & Security
+
+* **Routing Setup ([App.tsx](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/App.tsx))**: Operates `react-router-dom` for client-side routing. Authenticated pages are wrapped in a `<RequireAuth>` guard which checks for a stored JWT before rendering, redirecting unauthenticated users to `/login`.
+* **Authenticated Layout ([layout.tsx](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/pages/layout.tsx))**: Wraps the screen viewports with a desktop sidebar navigation panel and a mobile-friendly bottom nav bar. Provides shortcuts to all major tools and an external link to the Django admin panel dashboard.
+* **REST API Middleware Client ([backend.ts](file:///d:/TEGProjects/TEGCRM/teg-crm-web/src/lib/backend.ts))**: Exposes the `backendFetch` wrapper utility. In the browser, it retrieves a relative API URL (`/api/...`) so that requests are proxied via the Vite server to the backend service. It automatically injects the stored JWT token as an HTTP `Authorization` header (`Bearer <token>`). If the backend returns a `401 Unauthorized` response, `backendFetch` invalidates the session credentials locally and redirects the user to `/login`.
+
+### 2. UI Routing & Component Structure
+
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#111827',
+    'primaryBorderColor': '#4b5563',
+    'lineColor': '#6b7280',
+    'secondaryColor': '#f9fafb',
+    'tertiaryColor': '#f3f4f6',
+    'textColor': '#111827'
+  }
+}}%%
+graph TD
+    App["App.tsx (Router)"] --> Login["/login: LoginPage"]
+    App --> Guarded["RequireAuth Guard"]
+    
+    Guarded --> Layout["AppLayout (layout.tsx)"]
+    Layout --> Today["/today: TodayPage"]
+    Layout --> Pending["/pending-requests: PendingRequestsPage"]
+    Layout --> Enrichment["/enrichment: EnrichmentPage"]
+    Layout --> Messages["/messages: MessagesPage"]
+    Messages --> MessageDetail["/messages/:contactId: MessageDetailPage"]
+    Layout --> Contacts["/contacts: ContactsPage"]
+    Layout --> Events["/events: EventsPage"]
+    Events --> EventDetail["/events/:slug: EventDetailPage"]
+    Layout --> Dashboard["/dashboard: DashboardPage"]
+```
+
+---
+
+### 3. Screen Specifications & API Interaction Mapping
+
+#### 🔐 Login Page
+* **Path**: `/login`
+* **File Location**: `src/pages/login/index.tsx`
+* **Functionality**: Provides a simple password entry portal for authentication.
+* **Backend Integrations**:
+  - `POST /api/auth/login/`: Validates static password credentials, returning simple-jwt access and refresh tokens.
+
+#### 📅 Today's Updates Page
+* **Path**: `/today` (Default root path redirect target)
+* **File Location**: `src/pages/today/index.tsx`
+* **Functionality**: Serves as the primary workspace dashboard daily checklist, listing top recent/active contacts due for attention.
+* **Backend Integrations**:
+  - `GET /api/contacts/today/`: Fetches the latest 10 contacts requiring follow-up action.
+
+#### 📥 Bulk Import Pending Requests Page
+* **Path**: `/pending-requests`
+* **File Location**: `src/pages/pending-requests/index.tsx`
+* **Functionality**: Bulk-registers prospects who have pending connection invitations. The sales representative pastes the raw clipboard copy of the LinkedIn "Sent" requests page. The client parses details (names, headlines), alerts the user to duplicate contacts already saved in the CRM database, and assigns a follow-up owner and target event.
+* **Backend Integrations**:
+  - `GET /api/events/`: Fetches events registry to populate selection choices.
+  - `GET /api/contacts/?name={name}`: Performs exact name match checks to identify existing duplicate CRM prospects.
+  - `POST /api/contacts/`: Registers new contact records. Payload: `{ name, outreach_owner, event_id, source: "LinkedIn" }`.
+
+#### 👤 Enrichment Page
+* **Path**: `/enrichment`
+* **File Location**: `src/pages/enrichment/index.tsx`
+* **Functionality**: Offers a manual copy-paste text field for pasting the raw copy-pasted layout of a contact's LinkedIn profile page. The name parsed from the first line matches the contact in the database, triggering the background Gemini scraper and scoring signal.
+* **Backend Integrations**:
+  - `POST /api/contacts/enrich/`: Submits profile payload. Payload: `{ raw_text }`.
+
+#### 💬 Write Message (Search Contacts) Page
+* **Path**: `/messages`
+* **File Location**: `src/pages/messages/index.tsx`
+* **Functionality**: A query lookup dashboard enabling sales reps to quickly search for a contact and redirect to the generator screen.
+* **Backend Integrations**:
+  - `GET /api/contacts/?q={query}`: Fetches matching contacts using debounced autocomplete queries, displaying current pipeline stage and outreach status badges.
+
+#### ✉️ Message Detail Page
+* **Path**: `/messages/:contactId`
+* **File Location**: `src/pages/messages/[contactId]/index.tsx`
+* **Functionality**: Generates and displays 3 customized outreach message variants for a specific prospect. Evaluates and displays a fit rating score (1-5), checks text character length limitations (LinkedIn limit of 300 or 500 characters), and provides copy-to-clipboard buttons.
+* **Backend Integrations**:
+  - `POST /api/contacts/{contactId}/generate_message/`: Invokes Gemini to evaluation-rate the prospect and output personalized German message drafts.
+  - `POST /api/contacts/{contactId}/save_message/`: Saves the user-accepted outreach message text draft into the database.
+
+#### 📇 Contacts Explorer & Detail Dialog
+* **Path**: `/contacts`
+* **File Location**: `src/pages/contacts/index.tsx`
+* **Functionality**: Provides a filterable table interface showcasing the contact directory. Clicking any row opens a side dialog containing profile information, AI scoring details with full evaluation reasons, and dropdown selectors to update the contact's event, follow-up owner, or completion status. Also supports inline manual profile enrichment.
+* **Backend Integrations**:
+  - `GET /api/contacts/?q={q}&owner={owner}&page={page}`: Retrieves cursor-paginated contacts listing matched against filter conditions.
+  - `GET /api/events/` & `GET /api/team/`: Retrieves configurations to populate filter and editing dropdown selectors.
+  - `PATCH /api/contacts/{contactId}/`: Saves adjustments to contact fields (`event_id`, `follow_up_owner_id`, `follow_up_complete`).
+  - `POST /api/contacts/enrich/`: Inlines raw profile enrichment processing.
+
+#### 📣 Outreach Events Page
+* **Path**: `/events`
+* **File Location**: `src/pages/events/index.tsx`
+* **Functionality**: Main registry listing all tracked outreach events. Includes dialog forms to add new events and set up target prompts for lead evaluation scoring and messaging templates.
+* **Backend Integrations**:
+  - `GET /api/events/`: Lists target events.
+  - `POST /api/events/`: Registers a new target event. Payload: `{ name, date, luma_url, fit_scoring_prompt, outreach_prompt }`.
+  - `POST /api/events/{eventId}/test_prompt/`: Dry-runs outreach prompt templates against 5 random contacts to preview and debug copy variations.
+
+#### 📊 Event Detail Page & Pipelines
+* **Path**: `/events/:slug` (mapped using event IDs)
+* **File Location**: `src/pages/events/[slug]/index.tsx`
+* **Functionality**: Offers a tabbed project view specifically for managing a target event's campaign:
+  - **Leads**: Lists attendees mapped by AI fit score descending. Allows triggering AI evaluations per lead.
+  - **Outreach Drafts**: Lists generated message drafts under review. Reps can edit text inline (`PATCH`), approve drafts, or discard them.
+  - **Import Leads**: Uploads CSV or Excel spreadsheet files containing attendee lists scraped from LinkedIn (e.g., via Apify).
+  - **Prompts Settings**: Modifies evaluation criteria or message templates.
+* **Backend Integrations**:
+  - `GET /api/events/{slug}/`: Retrieves metadata for the event.
+  - `GET /api/events/{slug}/attendances/`: Retrieves attendee rows.
+  - `GET /api/events/{slug}/drafts/`: Retrieves outreach drafts.
+  - `POST /api/attendances/{attendanceId}/generate_message/`: Invokes lead evaluation scoring and drafts an outreach invite.
+  - `PATCH /api/drafts/{draftId}/`: Saves inline edits to message texts or sets status to `Approved`.
+  - `DELETE /api/drafts/{draftId}/`: Discards drafts from the queue.
+  - `POST /api/events/{slug}/import_leads/`: Uploads spreadsheet files containing lead lists.
+  - `PATCH /api/events/{slug}/`: Saves prompt configuration parameters.
+
+#### 📈 Aggregate Statistics Dashboard
+* **Path**: `/dashboard`
+* **File Location**: `src/pages/dashboard/index.tsx`
+* **Functionality**: Renders visualizations illustrating sales funnel health (total contacts, activation rates, distributions by source, tiers, and registration velocity trends) using `recharts`.
+* **Backend Integrations**:
+  - `GET /api/contacts/stats/`: Retrieves calculated stats aggregates.
+
+---
+
+### 4. Authenticated Request Integration Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Rep as Sales Representative
+    participant Client as React SPA (Vite)
+    participant Auth as Local Storage (jwt)
+    participant Server as DRF Backend
+    participant DB as SQLite Database
+    
+    Note over Client: Unauthenticated State
+    Rep->>Client: Navigate to /dashboard
+    Client-->>Rep: Redirect to /login
+    
+    Rep->>Client: Enter Credentials
+    Client->>Server: POST /api/auth/login/ {password}
+    Server->>Server: Validate credentials
+    Server-->>Client: Return SimpleJWT Tokens
+    Client->>Auth: Store access token in "teg_jwt"
+    Client-->>Rep: Redirect to /today
+    
+    Note over Client: Authenticated State
+    Rep->>Client: Open Contacts Explorer
+    Client->>Auth: Retrieve "teg_jwt" token
+    Client->>Server: GET /api/contacts/ (Authorization: Bearer <token>)
+    Server->>Server: Authenticate request & check token validity
+    Server->>DB: Query contacts
+    DB-->>Server: Return query set
+    Server-->>Client: Return JSON results
+    Client-->>Rep: Render contacts table list
+    
+    Note over Client: Token Expiration / Logout
+    Rep->>Client: Click "Sign Out" or trigger 401 Unauthorized
+    Client->>Auth: Remove "teg_jwt"
+    Client-->>Rep: Redirect to /login
+```
+
+---
+
+## 🧪 Testing Architecture
+
+The codebase features two test suites:
+
+### 1. Backend Pytest Suite (`teg-crm/tests/`)
+- **Environment**: Must always run inside the Django container (`teg-crm`) using `podman compose` to ensure alignment with settings and the SQLite database.
+- **Command**: `podman exec -it teg-crm pytest`
+
+### 2. Frontend Playwright E2E & Vitest Suite (`teg-crm-web/`)
+- **Unit Tests**: Powered by Vitest. Runs inside the frontend container:
+  - **Command**: `podman exec -it teg-crm-web npm test`
+- **End-to-End System Tests**: Managed by Playwright inside the frontend container:
+  - **Binary Integration**: The `Dockerfile` pre-installs native Alpine Chromium dependencies and Chromium itself, mapping them via `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser` and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
+  - **Configuration**: `playwright.config.ts` dynamically configures Chromium to execute using this path.
+  - **Command**: `podman exec -e CI=true -it teg-crm-web npx playwright test`
+  - **Coverage**: Includes E2E verification for sidebar navigation, event creation (with Luma URL formatting validations), contacts directory updates, and profile AI-enrichment scoring.

@@ -16,6 +16,7 @@ export interface Contact {
   id: string;
   name: string;
   linkedinUrl?: string;
+  profileHeadline?: string;
   followUpOwner?: string;
   followUpOwnerId?: string;
   followUpComplete: boolean;
@@ -46,9 +47,7 @@ export interface AttendanceRecord {
   contact: {
     id: number;
     name: string;
-    company_name: string;
     linkedin_url: string;
-    job_title: string;
     profile_summary?: string;
     experience?: string;
     about?: string;

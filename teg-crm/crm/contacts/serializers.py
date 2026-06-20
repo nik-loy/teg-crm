@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Event, Contact, TeamMember, RawProfileData, Rating
+from .models import Event, Contact, TeamMember, RawProfileData, Rating, SavedMessage
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,6 +28,13 @@ class RawProfileDataSerializer(serializers.ModelSerializer):
         fields = ["raw_text"]
 
 
+class SavedMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedMessage
+        fields = ["id", "message_text", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class ContactSerializer(serializers.ModelSerializer):
     follow_up_owner = TeamMemberSerializer(read_only=True)
     follow_up_owner_id = serializers.PrimaryKeyRelatedField(
@@ -38,10 +45,11 @@ class ContactSerializer(serializers.ModelSerializer):
     event_id = serializers.PrimaryKeyRelatedField(
         queryset=Event.objects.all(), source="event", write_only=True, required=False, allow_null=True
     )
+    saved_messages = SavedMessageSerializer(many=True, read_only=True)
     
     class Meta:
         model = Contact
         fields = [
-            "id", "name", "linkedin_url", "follow_up_owner", "follow_up_owner_id",
-            "follow_up_complete", "rating", "event", "event_id"
+            "id", "name", "linkedin_url", "profile_headline", "follow_up_owner", "follow_up_owner_id",
+            "follow_up_complete", "rating", "event", "event_id", "saved_messages"
         ]

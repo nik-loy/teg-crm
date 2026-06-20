@@ -3,40 +3,27 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { 
-  ArrowLeft, Users, FileText, Upload, Settings, 
-  Sparkles, CheckCircle, Edit, Trash, FileSpreadsheet, Loader2, Save 
+  ArrowLeft, Users, Settings, 
+  Sparkles, Loader2 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { backendFetch } from "@/lib/backend";
-import type { EventRecord, AttendanceRecord, DraftRecord } from "@/lib/types";
+import type { EventRecord, AttendanceRecord } from "@/lib/types";
 
 export default function EventDetailPage() {
   const { slug } = useParams<{ slug: string }>();
 
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
-  const [activeTab, setActiveTab] = useState<"leads" | "drafts" | "import" | "settings">("leads");
+  const [activeTab, setActiveTab] = useState<"leads" | "settings">("leads");
 
   // Tab 1: Leads State
   const [leads, setLeads] = useState<AttendanceRecord[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [generatingForId, setGeneratingForId] = useState<number | null>(null);
 
-  // Tab 2: Drafts State
-  const [drafts, setDrafts] = useState<DraftRecord[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(false);
-  const [editingDraftId, setEditingDraftId] = useState<number | null>(null);
-  const [editingText, setEditingText] = useState("");
-  const [savingDraftId, setSavingDraftId] = useState<number | null>(null);
-
-  // Tab 3: Import State
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ count?: number; error?: string } | null>(null);
-
-  // Tab 4: Settings State
+  // Tab 2: Settings State
   const [fitPrompt, setFitPrompt] = useState("");
   const [outreachPrompt, setOutreachPrompt] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -75,29 +62,12 @@ export default function EventDetailPage() {
     }
   }
 
-  // Load Event Drafts
-  async function loadDrafts() {
-    setLoadingDrafts(true);
-    try {
-      const res = await backendFetch(`/api/events/${slug}/drafts/`);
-      if (res.ok) {
-        const data = await res.json();
-        setDrafts(data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingDrafts(false);
-    }
-  }
-
   useEffect(() => {
     loadEventMeta();
   }, [slug]);
 
   useEffect(() => {
     if (activeTab === "leads") loadLeads();
-    else if (activeTab === "drafts") loadDrafts();
   }, [activeTab, slug]);
 
   // Generate outreach message
@@ -118,84 +88,6 @@ export default function EventDetailPage() {
       alert("Network error occurred during AI message generation.");
     } finally {
       setGeneratingForId(null);
-    }
-  }
-
-  // Edit Draft Inline
-  function startEditDraft(draft: DraftRecord) {
-    setEditingDraftId(draft.id);
-    setEditingText(draft.generated_text);
-  }
-
-  async function handleSaveDraft(draftId: number) {
-    setSavingDraftId(draftId);
-    try {
-      const res = await backendFetch(`/api/drafts/${draftId}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generated_text: editingText }),
-      });
-      if (res.ok) {
-        setEditingDraftId(null);
-        loadDrafts();
-      } else {
-        alert("Failed to save draft edits.");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSavingDraftId(null);
-    }
-  }
-
-  // Approve draft
-  async function handleApproveDraft(draftId: number) {
-    try {
-      const res = await backendFetch(`/api/drafts/${draftId}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Approved" }),
-      });
-      if (res.ok) {
-        loadDrafts();
-      } else {
-        alert("Failed to approve draft.");
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  // Import Leads File
-  async function handleImportSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!importFile) return;
-
-    setImporting(true);
-    setImportResult(null);
-
-    const formData = new FormData();
-    formData.append("file", importFile);
-
-    try {
-      const res = await backendFetch(`/api/events/${slug}/import_leads/`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setImportResult({ count: data.count });
-        setImportFile(null);
-      } else {
-        const errData = await res.json();
-        setImportResult({ error: errData.error || "Failed to process import file." });
-      }
-    } catch (err) {
-      console.error(err);
-      setImportResult({ error: "Failed to upload file to the server." });
-    } finally {
-      setImporting(false);
     }
   }
 
@@ -294,26 +186,6 @@ export default function EventDetailPage() {
           <Users className="h-4 w-4" /> Leads ({leads.length})
         </button>
         <button
-          onClick={() => setActiveTab("drafts")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-            activeTab === "drafts" 
-              ? "border-primary text-primary" 
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <FileText className="h-4 w-4" /> Outreach Drafts ({drafts.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("import")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-            activeTab === "import" 
-              ? "border-primary text-primary" 
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Upload className="h-4 w-4" /> Import Leads
-        </button>
-        <button
           onClick={() => setActiveTab("settings")}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
             activeTab === "settings" 
@@ -345,7 +217,6 @@ export default function EventDetailPage() {
               <Card className="border-dashed py-8 text-center bg-muted/10">
                 <CardContent className="space-y-2">
                   <p className="text-sm font-medium">No leads currently registered for this event.</p>
-                  <p className="text-xs text-muted-foreground">Go to the &quot;Import Leads&quot; tab to upload Apify CSV/Excel data.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -371,7 +242,7 @@ export default function EventDetailPage() {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {[lead.contact.job_title, lead.contact.company_name].filter(Boolean).join(" @ ") || "—"}
+                          —
                         </p>
                         {lead.fit_reason && (
                           <div className="mt-2 text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 py-0.5 bg-muted/20 rounded-r">
@@ -405,175 +276,6 @@ export default function EventDetailPage() {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* DRAFTS TAB */}
-        {activeTab === "drafts" && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">AI Outreach Message Queue</h2>
-
-            {loadingDrafts ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <p className="text-xs text-muted-foreground">Loading drafts...</p>
-              </div>
-            ) : drafts.length === 0 ? (
-              <Card className="border-dashed py-8 text-center bg-muted/10">
-                <CardContent className="space-y-2">
-                  <p className="text-sm font-medium">No drafts currently in review queue.</p>
-                  <p className="text-xs text-muted-foreground">Click &quot;Generate Message&quot; on the Leads tab to populate the outreach queue.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {drafts.map((draft) => (
-                  <Card key={draft.id} className={`border-l-4 hover:shadow-sm transition-shadow ${draft.status === "Approved" ? "border-l-emerald-500" : "border-l-amber-500"}`}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <CardTitle className="text-base font-bold">
-                            {draft.attendance.contact.name}
-                          </CardTitle>
-                          <CardDescription className="text-xs">
-                            Step {draft.step_number} • {draft.attendance.contact.company_name}
-                          </CardDescription>
-                        </div>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          draft.status === "Approved" 
-                            ? "bg-emerald-100 text-emerald-800" 
-                            : "bg-amber-100 text-amber-800"
-                        }`}>
-                          {draft.status === "Approved" && <CheckCircle className="h-3 w-3" />}
-                          {draft.status}
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {editingDraftId === draft.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editingText}
-                            onChange={(e) => setEditingText(e.target.value)}
-                            className="w-full min-h-[100px] text-sm p-2.5 border rounded-md bg-background focus:outline-primary"
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              onClick={() => setEditingDraftId(null)} 
-                              variant="ghost" 
-                              size="sm"
-                              className="text-xs"
-                            >
-                              Cancel
-                            </Button>
-                            <Button 
-                              onClick={() => handleSaveDraft(draft.id)} 
-                              disabled={savingDraftId === draft.id} 
-                              size="sm"
-                              className="text-xs flex items-center gap-1"
-                            >
-                              {savingDraftId === draft.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Save className="h-3.5 w-3.5" />
-                              )}
-                              Save
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="text-sm p-3 border rounded bg-muted/20 text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                            {draft.generated_text}
-                          </div>
-                          <div className="flex justify-end items-center gap-2 pt-1">
-                            <Button 
-                              onClick={() => startEditDraft(draft)} 
-                              variant="outline" 
-                              size="sm" 
-                              className="text-xs flex items-center gap-1"
-                            >
-                              <Edit className="h-3 w-3" /> Edit
-                            </Button>
-                            {draft.status !== "Approved" && (
-                              <Button 
-                                onClick={() => handleApproveDraft(draft.id)} 
-                                variant="default" 
-                                size="sm" 
-                                className="text-xs bg-emerald-600 hover:bg-emerald-700 hover:scale-105 transition-all flex items-center gap-1"
-                              >
-                                <CheckCircle className="h-3.5 w-3.5" /> Approve
-                              </Button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* IMPORT TAB */}
-        {activeTab === "import" && (
-          <div className="space-y-4 max-w-xl">
-            <h2 className="text-xl font-bold">Import Apify LinkedIn Leads</h2>
-            <p className="text-xs text-muted-foreground">
-              Upload the CSV or Excel file downloaded from Apify containing LinkedIn profiles. The importer will match column headers like Name, LinkedIn URL, Job Title, Company, and Profile Summary automatically.
-            </p>
-
-            <Card className="border-dashed bg-muted/5">
-              <CardContent className="pt-6">
-                <form onSubmit={handleImportSubmit} className="space-y-4">
-                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 bg-background">
-                    <FileSpreadsheet className="h-10 w-10 text-muted-foreground mb-3" />
-                    <input 
-                      type="file" 
-                      accept=".csv,.xlsx" 
-                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                      className="text-sm"
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Supports CSV and Excel files (.xlsx).
-                    </p>
-                  </div>
-                  {importFile && (
-                    <div className="text-xs bg-muted p-2 rounded flex items-center justify-between">
-                      <span className="truncate font-semibold">{importFile.name}</span>
-                      <span className="text-muted-foreground">({(importFile.size / 1024).toFixed(1)} KB)</span>
-                    </div>
-                  )}
-
-                  {importResult && (
-                    <div className={`p-3 rounded text-xs font-semibold ${
-                      importResult.error 
-                        ? "bg-destructive/10 text-destructive border border-destructive/20" 
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                    }`}>
-                      {importResult.error ? (
-                        <p>Error: {importResult.error}</p>
-                      ) : (
-                        <p>✓ Ingested {importResult.count} attendees successfully from file.</p>
-                      )}
-                    </div>
-                  )}
-
-                  <Button type="submit" disabled={importing || !importFile} className="w-full">
-                    {importing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Ingesting Leads data...
-                      </>
-                    ) : (
-                      "Start Lead Ingestion"
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
           </div>
         )}
 

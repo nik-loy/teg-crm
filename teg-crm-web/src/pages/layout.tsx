@@ -1,7 +1,7 @@
 
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck, CalendarRange, Database } from "lucide-react";
+import { Home, UserPlus, MessageSquare, Camera, Users, KanbanSquare, LayoutDashboard, Inbox, UserCheck, CalendarRange, Database, Download } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 const NAV = [
@@ -61,6 +61,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="border-t p-4 space-y-2">
           <a
+            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/contacts/export/` : "http://localhost:8000/api/contacts/export/"}
+            className={buttonVariants({ variant: "ghost", size: "sm" }) + " w-full justify-start text-muted-foreground hover:bg-muted hover:text-foreground flex items-center"}
+          >
+            <Download className="mr-3 h-4 w-4" />
+            Export Leads
+          </a>
+          <a
             href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
             target="_blank"
             rel="noopener noreferrer"
@@ -84,6 +91,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 inset-x-0 h-14 border-b bg-background flex items-center justify-between px-4 z-10">
         <span className="font-semibold">TEG CRM</span>
         <div className="flex items-center gap-1">
+          <a
+            href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/contacts/export/` : "http://localhost:8000/api/contacts/export/"}
+            title="Export Leads"
+            className={buttonVariants({ variant: "ghost", size: "icon" })}
+          >
+            <Download className="h-5 w-5" />
+          </a>
           <a
             href={process.env.NEXT_PUBLIC_BACKEND_URL ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/` : "http://localhost:8000/admin/"}
             target="_blank"

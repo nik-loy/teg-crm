@@ -10,6 +10,7 @@ describe("Frontend Basic Tests", () => {
     const raw = {
       id: 1,
       name: "John Doe",
+      profile_headline: "Software Engineer",
       follow_up_owner: { id: 2, name: "Alice" },
       follow_up_complete: true,
       rating: { score: 4, reason: "Good" }
@@ -17,6 +18,7 @@ describe("Frontend Basic Tests", () => {
     const c = djangoToFrontendContact(raw);
     expect(c.id).toBe("1");
     expect(c.name).toBe("John Doe");
+    expect(c.profileHeadline).toBe("Software Engineer");
     expect(c.followUpOwner).toBe("Alice");
     expect(c.followUpOwnerId).toBe("2");
     expect(c.followUpComplete).toBe(true);

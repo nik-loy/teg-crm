@@ -49,7 +49,7 @@ I have 10 years of experience with React and AI, focusing on scalable agentic pi
     await expect(row.locator('text=⭐')).toBeVisible({ timeout: 5000 });
     
     // The rationale is in the last column, verify it's not the default "—"
-    const rationaleText = await row.locator('td').nth(4).innerText();
+    const rationaleText = await row.locator('td').nth(5).innerText();
     expect(rationaleText).not.toBe("—");
     expect(rationaleText.length).toBeGreaterThan(5);
   });

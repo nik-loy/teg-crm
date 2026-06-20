@@ -4,7 +4,7 @@ export function getBackendUrl(): string {
   if (typeof window === "undefined") {
     return process.env.BACKEND_URL || "http://teg-crm:8000";
   }
-  return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  return "";
 }
 
 export async function backendFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -35,6 +35,7 @@ export function djangoToFrontendContact(d: any): Contact {
     id: String(d.id),
     name: d.name || "",
     linkedinUrl: d.linkedin_url || "",
+    profileHeadline: d.profile_headline || "",
     followUpOwner: d.follow_up_owner ? d.follow_up_owner.name : "",
     followUpOwnerId: d.follow_up_owner ? String(d.follow_up_owner.id) : undefined,
     followUpComplete: !!d.follow_up_complete,

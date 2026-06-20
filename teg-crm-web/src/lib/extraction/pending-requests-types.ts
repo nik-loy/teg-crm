@@ -1,7 +1,7 @@
 export interface PendingRequest {
   name: string;
   headline: string;
-  sentDaysAgo: number;
+  sentDaysAgo?: number;
   sentDate?: string;
   linkedinUrl?: string;
 }

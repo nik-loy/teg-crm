@@ -76,7 +76,7 @@ export default function EventsPage() {
         body: JSON.stringify({
           name,
           date,
-          luma_url: lumaUrl,
+          luma_url: lumaUrl.trim() || null,
           fit_scoring_prompt: fitScoringPrompt,
           outreach_prompt: outreachPrompt,
         }),
@@ -92,7 +92,20 @@ export default function EventsPage() {
         loadEvents();
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert(errData.error || "Failed to create event. Please check inputs.");
+        let errorMessage = "Failed to create event. Please check inputs.";
+        if (errData.error) {
+          errorMessage = errData.error;
+        } else if (typeof errData === "object" && errData !== null) {
+          const fieldErrors = Object.entries(errData).map(([field, errors]) => {
+            const errs = Array.isArray(errors) ? errors.join(", ") : String(errors);
+            const fieldName = field.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            return `${fieldName}: ${errs}`;
+          });
+          if (fieldErrors.length > 0) {
+            errorMessage = `Failed to create event:\n${fieldErrors.join("\n")}`;
+          }
+        }
+        alert(errorMessage);
       }
     } catch (err) {
       console.error(err);
@@ -259,6 +272,7 @@ export default function EventsPage() {
             <div className="space-y-1">
               <label className="text-xs font-semibold text-muted-foreground uppercase">Luma Event URL (Optional)</label>
               <Input
+                type="url"
                 placeholder="https://lu.ma/..."
                 value={lumaUrl}
                 onChange={(e) => setLumaUrl(e.target.value)}

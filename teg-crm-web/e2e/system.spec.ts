@@ -17,7 +17,7 @@ test.describe("TEG CRM Sidebar Navigation", () => {
   const sidebarButtons = [
     { label: "Today", url: /\/today/, expectedTitle: "Today" },
     { label: "Pending Req.", url: /\/pending-requests/, expectedTitle: "Pending Requests" },
-    { label: "Enrichment", url: /\/connections/, expectedTitle: "Enrichment" },
+    { label: "Enrichment", url: /\/enrichment/, expectedTitle: "Enrichment" },
     { label: "Write a message", url: /\/messages/, expectedTitle: "Write a message" },
     { label: "Contacts", url: /\/contacts/, expectedTitle: "Contacts" },
     { label: "Events", url: /\/events/, expectedTitle: "Events" },
@@ -33,7 +33,7 @@ test.describe("TEG CRM Sidebar Navigation", () => {
     });
   }
 
-  test("allows selecting and editing an event entry", async ({ page }) => {
+  test("allows selecting and editing an event entry and verifies leads", async ({ page }) => {
     // 1. Go to events
     const link = page.locator("aside").getByRole("link", { name: "Events", exact: true });
     await link.click();
@@ -47,11 +47,18 @@ test.describe("TEG CRM Sidebar Navigation", () => {
     // 3. Confirm we are on the event detail page
     await expect(page).toHaveURL(/\/events\/[a-z0-9-]+/);
 
-    // 4. Click on Prompts Settings tab
+    // 4. Verify that leads are correctly entered for this event
+    const leadsTab = page.getByRole("button", { name: /Leads \(\d+\)/ });
+    await leadsTab.click();
+    // Default seed data includes "John Doe" and "Jane Roe"
+    await expect(page.locator("text=John Doe").first()).toBeVisible();
+    await expect(page.locator("text=Jane Roe").first()).toBeVisible();
+
+    // 5. Click on Prompts Settings tab
     const settingsTab = page.getByRole("button", { name: "Prompts Settings" });
     await settingsTab.click();
 
-    // 5. Fill out the outreach prompt
+    // 6. Fill out the outreach prompt
     const outreachTextArea = page.locator('textarea[placeholder*="Hi {name}"]');
     await expect(outreachTextArea).toBeVisible();
     
@@ -62,10 +69,10 @@ test.describe("TEG CRM Sidebar Navigation", () => {
     const testText = originalText + " (E2E Test Edit)";
     await outreachTextArea.fill(testText);
 
-    // 6. Click Save
+    // 7. Click Save
     await page.getByRole("button", { name: "Save Prompts Settings" }).click();
 
-    // 7. Verify the dialog alert was triggered
+    // 8. Verify the dialog alert was triggered
     const dialog = await dialogPromise;
     expect(dialog.message()).toContain("saved successfully");
     await dialog.accept();
@@ -77,4 +84,12 @@ test.describe("TEG CRM Sidebar Navigation", () => {
     const cleanupDialog = await cleanupDialogPromise;
     await cleanupDialog.accept();
   });
+
+  test("Export Leads link has correct href", async ({ page }) => {
+    // Click the Export Leads link in the sidebar
+    const exportLink = page.locator("aside").getByRole("link", { name: "Export Leads" });
+    await expect(exportLink).toHaveAttribute("href", /.*\/api\/contacts\/export\//);
+  });
 });
+
+

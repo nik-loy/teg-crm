@@ -21,5 +21,5 @@ RUN pip install --no-cache-dir ".[dev]"
 # Expose port
 EXPOSE 8000
 
-# Run django server
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Run entrypoint script
+CMD ["python", "entrypoint.py"]

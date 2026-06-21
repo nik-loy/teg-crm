@@ -41,8 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-      const res = await fetch(`${backendUrl}/api/contacts/export/`, {
+      const res = await fetch("/api/contacts/export/", {
         headers: {
           "Authorization": `Bearer ${token}`
         }

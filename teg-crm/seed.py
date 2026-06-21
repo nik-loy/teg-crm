@@ -24,37 +24,47 @@ def seed():
 
     # Create Contacts
     c1, _ = Contact.objects.get_or_create(
-        name="John Doe",
         linkedin_url="https://linkedin.com/in/johndoe",
-        follow_up_owner=tm1,
-        follow_up_complete=False,
-        event=e1
+        defaults={
+            "name": "John Doe",
+            "follow_up_owner": tm1,
+            "follow_up_complete": False,
+            "event": e1
+        }
     )
     
     # Create RawProfileData for Contact 1
     RawProfileData.objects.get_or_create(
         contact=c1,
-        raw_text="John Doe\nVP of AI at TechCorp\nMunich, Germany\nPassionate about applying agentic workflows to enterprise software."
+        defaults={
+            "raw_text": "John Doe\nVP of AI at TechCorp\nMunich, Germany\nPassionate about applying agentic workflows to enterprise software."
+        }
     )
 
     # Create Rating for Contact 1
     Rating.objects.get_or_create(
         contact=c1,
-        score=5,
-        reason="Has strong AI experience and works at a relevant company."
+        defaults={
+            "score": 5,
+            "reason": "Has strong AI experience and works at a relevant company."
+        }
     )
 
     c2, _ = Contact.objects.get_or_create(
-        name="Jane Roe",
         linkedin_url="https://linkedin.com/in/janeroe",
-        follow_up_owner=tm2,
-        follow_up_complete=True,
-        event=e1
+        defaults={
+            "name": "Jane Roe",
+            "follow_up_owner": tm2,
+            "follow_up_complete": True,
+            "event": e1
+        }
     )
     
     RawProfileData.objects.get_or_create(
         contact=c2,
-        raw_text="Jane Roe\nFrontend Developer\nLondon, UK\nReact and Next.js specialist."
+        defaults={
+            "raw_text": "Jane Roe\nFrontend Developer\nLondon, UK\nReact and Next.js specialist."
+        }
     )
 
     print("Database seeding completed successfully.")
